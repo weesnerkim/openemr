@@ -107,7 +107,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     "*" . $claim->billingContactName() .
     "*TE" .
     "*" . $claim->billingContactPhone();
-  if ($claim->x12gsper06()) {
+  if ($claim->x12gsper06() && !$CMS_5010) {		// KW added 5010 check, ED is 4010 code
     $out .= "*ED*" . $claim->x12gsper06();
   }
   $out .= "~\n";
@@ -598,7 +598,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
         "~\n";
     }
 
-    if ($claim->referrerUPIN()) {
+    if (!CMS_5010 && $claim->referrerUPIN()) {
       ++$edicount;
       $out .= "REF" .   // Referring Provider Secondary Identification
         "*1G" .
@@ -614,19 +614,20 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     "*" . $claim->providerLastName() .
     "*" . $claim->providerFirstName() .
     "*" . $claim->providerMiddleName() .
-    "*" .
-    "*";
-  if ($CMS_5010 || $claim->providerNPI()) { $out .=
-    "*XX" .
-    "*" . $claim->providerNPI();
-  } else { $out .=
-    "*34" .                             // not allowed for 5010
-    "*" . $claim->providerSSN();
-    $log .= "*** Rendering provider has no NPI.\n";
-  }
-  $out .= "~\n";
+//    "*" .   ***** Rod I really wasn't sure what to do here. Kim **************************
+//    "*";
+//  if ($CMS_5010 || $claim->providerNPI()) { $out .=
+//    "*XX" .
+//    "*" . $claim->providerNPI();
+//  } else { $out .=
+//    "*34" .                             // not allowed for 5010
+//    "*" . $claim->providerSSN();
+//    $log .= "*** Rendering provider has no NPI.\n";
+//  }
+//  $out .= "~\n";
+    "~\n";
 
-  if ($claim->providerTaxonomy()) {
+  if (!CMS_5010 && $claim->providerTaxonomy()) {
     ++$edicount;
     $out .= "PRV" .
       "*PE" . // PErforming provider
