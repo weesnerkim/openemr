@@ -343,9 +343,9 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     "*" . ($encounter_claim ? $claim->payerAltID() : $claim->payerID()) .
     "~\n";
 
-  // if (!$claim->payerID()) {
-  //   $log .= "*** CMS ID is missing for payer '" . $claim->payerName() . "'.\n";
-  // }
+   if (!$claim->payerID()) {
+     $log .= "*** CMS ID is missing for payer '" . $claim->payerName() . "'.\n";
+   }
 
   if (!$CMS_5010) {
     // The 5010 spec says:
@@ -875,9 +875,9 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
       "*" . $claim->payerID($ins) .
       "~\n";
 
-    // if (!$claim->payerID($ins)) {
-    //   $log .= "*** CMS ID is missing for payer '" . $claim->payerName($ins) . "'.\n";
-    // }
+     if (!$claim->payerID($ins)) {
+       $log .= "*** CMS ID is missing for payer '" . $claim->payerName($ins) . "'.\n";
+     }
 
     // Payer address (N3 and N4) are added below so that Gateway EDI can
     // auto-generate secondary claims.  These do NOT appear in my copy of
