@@ -20,18 +20,20 @@
  //       [Save]  [Find Available]  [Delete]  [Cancel]         //
  //------------------------------------------------------------//
 
+// continue session
+session_start();
+
 //landing page definition -- where to go if something goes wrong
-$landingpage = "index.php";
+$landingpage = "index.php?site=".$_SESSION['site_id'];
 //
 
 // kick out if patient not authenticated
-session_start();
 if ( isset($_SESSION['pid']) && isset($_SESSION['patient_portal_onsite']) ) {
   $pid = $_SESSION['pid'];
 }
 else {
   session_destroy();
-  header('Location: '.$landingpage.'?w');
+  header('Location: '.$landingpage.'&w');
   exit;
 }
 //
@@ -677,7 +679,7 @@ td { font-size:0.8em; }
 
 <style type="text/css">@import url(../library/dynarch_calendar.css);</style>
 <script type="text/javascript" src="../library/topdialog.js"></script>
-<script type="text/javascript" src="../library/dialog.js"></script>
+<script type="text/javascript" src="../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 <script type="text/javascript" src="../library/textformat.js"></script>
 <script type="text/javascript" src="../library/dynarch_calendar.js"></script>
 <script type="text/javascript" src="../library/dynarch_calendar_en.js"></script>
@@ -903,7 +905,7 @@ td { font-size:0.8em; }
  }
 
  function deleteEvent() {
-    if (confirm("Deleting this event cannot be undone. It cannot be recovered once it is gone.\nAre you sure you wish to delete this event?")) {
+    if (confirm("Deleting this event cannot be undone. It cannot be recovered once it is gone. Are you sure you wish to delete this event?")) {
         var f = document.getElementById('theform');
         var form_action = document.getElementById('form_action');
         form_action.value="delete";
@@ -1006,7 +1008,7 @@ td { font-size:0.8em; }
         while ($urow = sqlFetchArray($ures)) {
             echo "    <option value='" . $urow['id'] . "'";
 //            if ($urow['id'] == $_SESSION['authUserID']) echo " selected"; 
-            if (($urow['id'] == $_GET['userid'])||($urow['id']== $userid)) echo " selected"; 
+            if (($urow['id'] == $_GET['userid'])||($urow['id']== $userid)) echo " selected";
             echo ">" . $urow['lname'];
             if ($urow['fname']) echo ", " . $urow['fname'];
             echo "</option>\n";

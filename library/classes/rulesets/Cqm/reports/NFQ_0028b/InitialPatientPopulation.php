@@ -1,5 +1,5 @@
 <?php
-// Copyright (C) 2011 Brady Miller <brady@sparmy.com>
+// Copyright (C) 2011 Brady Miller <brady.g.miller@gmail.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -7,8 +7,8 @@
 // of the License, or (at your option) any later version.
 //
 class NFQ_0028b_InitialPatientPopulation implements CqmFilterIF
-{ 
-    public function getTitle() 
+{
+    public function getTitle()
     {
         return "Initial Patient Population";
     }
@@ -26,10 +26,10 @@ class NFQ_0028b_InitialPatientPopulation implements CqmFilterIF
                Helper::check( ClinicalType::ENCOUNTER, Encounter::ENC_PRE_MED_SER_18_OLDER, $patient, $beginDate, $endDate, $oneEncounter ) ||
                Helper::check( ClinicalType::ENCOUNTER, Encounter::ENC_PRE_IND_COUNSEL, $patient, $beginDate, $endDate, $oneEncounter ) ||
                Helper::check( ClinicalType::ENCOUNTER, Encounter::ENC_PRE_MED_GROUP_COUNSEL, $patient, $beginDate, $endDate, $oneEncounter ) ||
-               Helper::check( ClinicalType::ENCOUNTER, Encounter::ENC_PRE_MED_OTHER_SERV, $patient, $beginDate, $endDate, $oneEncounter ) 
+               Helper::check( ClinicalType::ENCOUNTER, Encounter::ENC_PRE_MED_OTHER_SERV, $patient, $beginDate, $endDate, $oneEncounter )
              ) ) {
             return true;
-        } 
+        }
         
         return false;
     }

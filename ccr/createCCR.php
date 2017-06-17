@@ -1,43 +1,39 @@
 <?php
-//  ------------------------------------------------------------------------ //
-//                     Garden State Health Systems                           //
-//                    Copyright (c) 2010 gshsys.com                          //
-//                      <http://www.gshsys.com/>                             //
-//  ------------------------------------------------------------------------ //
-//  This program is free software; you can redistribute it and/or modify     //
-//  it under the terms of the GNU General Public License as published by     //
-//  the Free Software Foundation; either version 2 of the License, or        //
-//  (at your option) any later version.                                      //
-//                                                                           //
-//  You may not change or alter any portion of this comment or credits       //
-//  of supporting developers from this source code or any supporting         //
-//  source code which is considered copyrighted (c) material of the          //
-//  original comment or credit authors.                                      //
-//                                                                           //
-//  This program is distributed in the hope that it will be useful,          //
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of           //
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            //
-//  GNU General Public License for more details.                             //
-//                                                                           //
-//  You should have received a copy of the GNU General Public License        //
-//  along with this program; if not, write to the Free Software              //
-//  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA //
-//  ------------------------------------------------------------------------ //
+/**
+ * CCR Script.
+ *
+ * Copyright (C) 2010 Garden State Health Systems <http://www.gshsys.com/>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Garden State Health Systems <http://www.gshsys.com/>
+ * @link    http://www.open-emr.org
+ */
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
+
 
 // check if using the patient portal
 //(if so, then use the portal authorization)
-if (isset($_GET['portal_auth'])) {
-  $landingpage = "../patients/index.php";
+if (isset($_GET['portal_auth']) || isset($_GET['portal_auth_two'])) {
+  if (isset($_GET['portal_auth'])) {
+    $landingpage = "../patients/index.php";
+  }
+  else { // isset($_GET['portal_auth_two'])
+    $landingpage = "../portal/index.php";
+  }
   session_start();
-  if ( isset($_SESSION['pid']) && isset($_SESSION['patient_portal_onsite']) ) {
+  if ( isset($_SESSION['pid']) && (isset($_SESSION['patient_portal_onsite']) || isset($_SESSION['patient_portal_onsite_two']))) {
     $pid = $_SESSION['pid'];
     $ignoreAuth=true;
     global $ignoreAuth;
@@ -52,10 +48,12 @@ if (isset($_GET['portal_auth'])) {
 require_once(dirname(__FILE__) . "/../interface/globals.php");
 require_once(dirname(__FILE__) . "/../library/sql-ccr.inc");
 require_once(dirname(__FILE__) . "/uuid.php");
+require_once(dirname(__FILE__) . "/transmitCCD.php");
+require_once(dirname(__FILE__) . "/../custom/code_types.inc.php");
 
-function createCCR($action,$raw="no"){
+function createCCR($action,$raw="no",$requested_by=""){
 
-	$authorID = getUuid();
+  $authorID = getUuid();
   $patientID = getUuid();
   $sourceID = getUuid();
   $oemrID = getUuid();
@@ -128,15 +126,15 @@ function createCCR($action,$raw="no"){
 	   $e_ccr->appendChild($e_Actors);
 	   
 	   if ($action=="generate"){
-	   	gnrtCCR($ccr,$raw);
+	   	gnrtCCR($ccr,$raw,$requested_by);
 	   }
 	   
 	   if($action == "viewccd"){
-	   	viewCCD($ccr,$raw);
+	   	viewCCD($ccr,$raw,$requested_by);
 	   }
 	}
 	
-	function gnrtCCR($ccr,$raw="no"){
+	function gnrtCCR($ccr,$raw="no",$requested_by=""){
 		global $pid;
 
 		$ccr->preserveWhiteSpace = false;
@@ -148,7 +146,7 @@ function createCCR($action,$raw="no"){
 			echo $ccr->saveXml();
 			echo "</textarea>";
 			return;
-                }	
+                }
 
                 else if ($raw == "hybrid") {
 			// send a file that contains a hybrid file of the raw xml and the xsl stylesheet
@@ -165,7 +163,7 @@ function createCCR($action,$raw="no"){
 			$zipName = $tempDir . "/" . getReportFilename() . "-ccr.zip";
 			if (file_exists($zipName)) {
 				unlink($zipName);
-			}	
+			}
 			$zip = new ZipArchive();
 			if (!($zip)) {
 				displayError(xl("ERROR: Unable to Create Zip Archive."));
@@ -198,6 +196,13 @@ function createCCR($action,$raw="no"){
 			}
                 }
 
+                else if (substr($raw,0,4)=="send") {
+                   $recipient = trim(stripslashes(substr($raw,5)));
+                   $result=transmitCCD($ccr,$recipient,$requested_by,"CCR");
+                   echo htmlspecialchars($result,ENT_NOQUOTES);
+                   return;
+                }
+
 		else {
 			header("Content-type: application/xml");
                 	echo $ccr->saveXml();
@@ -205,7 +210,8 @@ function createCCR($action,$raw="no"){
 		
 	}
 	
-	function viewCCD($ccr,$raw="no"){
+	function viewCCD($ccr,$raw="no",$requested_by=""){
+		global $pid;
 		
 		$ccr->preserveWhiteSpace = false;
 		$ccr->formatOutput = true;
@@ -237,6 +243,59 @@ function createCCR($action,$raw="no"){
                   return;
                 }
 
+                if ($raw == "pure") {
+                        // send a zip file that contains a separate xml data file and xsl stylesheet
+                        if (! (class_exists('ZipArchive')) ) {
+                                displayError(xl("ERROR: Missing ZipArchive PHP Module"));
+                                return;
+                        }
+                        $tempDir = $GLOBALS['temporary_files_dir'];
+                        $zipName = $tempDir . "/" . getReportFilename() . "-ccd.zip";
+                        if (file_exists($zipName)) {
+                                unlink($zipName);
+                        }
+                        $zip = new ZipArchive();
+                        if (!($zip)) {
+                                displayError(xl("ERROR: Unable to Create Zip Archive."));
+                                return;
+                        }
+                        if ( $zip->open($zipName, ZIPARCHIVE::CREATE) ) {
+                                $zip->addFile("stylesheet/cda.xsl", "stylesheet/cda.xsl");
+                                $xmlName = $tempDir . "/" . getReportFilename() . "-ccd.xml";
+                                if (file_exists($xmlName)) {
+                                        unlink($xmlName);
+                                }
+				$e_styleSheet = $ccd->createProcessingInstruction('xml-stylesheet',
+					'type="text/xsl" href="stylesheet/cda.xsl"');
+				$ccd->insertBefore($e_styleSheet,$ccd->firstChild);
+                                $ccd->save($xmlName);
+                                $zip->addFile($xmlName, basename($xmlName) );
+                                $zip->close();
+                                header("Pragma: public");
+                                header("Expires: 0");
+                                header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
+                                header("Content-Type: application/force-download");
+                                header("Content-Length: " . filesize($zipName));
+                                header("Content-Disposition: attachment; filename=" . basename($zipName) . ";");
+                                header("Content-Description: File Transfer");
+                                readfile($zipName);
+                                unlink($zipName);
+                                unlink($xmlName);
+                                exit(0);
+                        }
+                        else {
+                                displayError(xl("ERROR: Unable to Create Zip Archive."));
+                                return;
+                        }
+                }
+
+                if (substr($raw,0,4)=="send") {
+                   $recipient = trim(stripslashes(substr($raw,5)));
+		   $result=transmitCCD($ccd,$recipient,$requested_by);
+		   echo htmlspecialchars($result,ENT_NOQUOTES);
+		   return;
+                }
+
 		$ss = new DOMDocument();
 		$ss->load(dirname(__FILE__) ."/stylesheet/cda.xsl");
 				
@@ -245,7 +304,6 @@ function createCCR($action,$raw="no"){
 		$html = $xslt->transformToXML($ccd);
 
 		echo $html;
-		
 	
 	}
 
@@ -310,9 +368,19 @@ function createCCR($action,$raw="no"){
 		echo $main_xml;
 	}
 	
-if($_POST['ccrAction'])
-{
-createCCR($_POST['ccrAction'],$_POST['raw']);
+if($_POST['ccrAction']) {
+  $raw=$_POST['raw'];
+  /* If transmit requested, fail fast if the recipient address fails basic validation */
+  if (substr($raw,0,4)=="send") {
+    $send_to = trim(stripslashes(substr($raw,5)));
+    if (!PHPMailer::ValidateAddress($send_to)) {
+      echo(htmlspecialchars( xl('Invalid recipient address. Please try again.'), ENT_QUOTES));
+      return;
+    }
+    createCCR($_POST['ccrAction'],$raw,$_POST['requested_by']);
+  } else {
+    createCCR($_POST['ccrAction'],$raw);
+  }
 }
 
 ?>

@@ -11,6 +11,8 @@ require_once("../../library/patient.inc");
 require_once("../../library/acl.inc");
 require_once("../../custom/code_types.inc.php");
 
+$facilityService = new \services\FacilityService();
+
 function thisLineItem($row, $codetype, $code) {
   global $code_types;
 
@@ -79,6 +81,15 @@ else { // not export
 <head>
 <?php html_header_show();?>
 <title><?php xl('Pending Followup from Results','e') ?></title>
+
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-9-1/index.js"></script>
+<script language="JavaScript">
+ $(document).ready(function() {
+  var win = top.printLogSetup ? top : opener.top;
+  win.printLogSetup(document.getElementById('printbutton'));
+ });
+</script>
+
 </head>
 
 <body leftmargin='0' topmargin='0' marginwidth='0' marginheight='0'>
@@ -95,11 +106,10 @@ else { // not export
 <?php
   // Build a drop-down list of facilities.
   //
-  $query = "SELECT id, name FROM facility ORDER BY name";
-  $fres = sqlStatement($query);
+  $fres = $facilityService->getAll();
   echo "   <select name='form_facility'>\n";
   echo "    <option value=''>-- All Facilities --\n";
-  while ($frow = sqlFetchArray($fres)) {
+  foreach($fres as $frow) {
     $facid = $frow['id'];
     echo "    <option value='$facid'";
     if ($facid == $form_facility) echo " selected";
@@ -124,7 +134,7 @@ else { // not export
    &nbsp;
    <input type='submit' name='form_csvexport' value="<?php xl('Export to CSV','e') ?>">
    &nbsp;
-   <input type='button' value='<?php xl('Print','e'); ?>' onclick='window.print()' />
+   <input type='button' value='<?php echo xla('Print'); ?>' id='printbutton' />
   </td>
  </tr>
 

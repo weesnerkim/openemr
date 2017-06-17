@@ -4,11 +4,9 @@
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
-include_once("../../globals.php");
-include_once("$srcdir/billing.inc");
-include_once("$srcdir/sql.inc");
-include_once("$srcdir/acl.inc");
-require_once("$srcdir/formatting.inc.php");
+require_once("../../globals.php");
+require_once("$srcdir/billing.inc");
+require_once("$srcdir/acl.inc");
 
 $mode              = $_REQUEST['mode'];
 $type              = $_REQUEST['type'];
@@ -20,7 +18,7 @@ $text              = $_REQUEST['text'];
 $payment_method    = $_REQUEST['payment_method'];
 $insurance_company = $_REQUEST['insurance_company'];
 
-$target = $GLOBALS['concurrent_layout'] ? '_parent' : 'Main';
+$target = '_parent';
 
 // Possible units of measure for NDC drug quantities.
 $ndc_uom_choices = array(
@@ -46,12 +44,12 @@ if (isset($mode)) {
 		$provid = $tmp['id'] ? $tmp['id'] : $_SESSION["authUserID"];
 
 		if (strtolower($type) == "copay") {
-			addBilling($encounter, $type, sprintf("%01.2f", $code), $payment_method,
+			addBilling($encounter, $type, sprintf("%01.2f", $code), strip_escape_custom($payment_method),
 				$pid, $userauthorized, $provid, $modifier, $units,
 				sprintf("%01.2f", 0 - $code));
 		}
 		elseif (strtolower($type) == "other") {
-			addBilling($encounter, $type, $code, $text, $pid, $userauthorized,
+			addBilling($encounter, $type, $code, strip_escape_custom($text), $pid, $userauthorized,
 				$provid, $modifier, $units, sprintf("%01.2f", $fee));
 		}
 		else {
@@ -63,7 +61,7 @@ if (isset($mode)) {
           "ORDER BY date DESC LIMIT 1");
         if (!empty($tmp)) $ndc_info = $tmp['ndc_info'];
       }
-      addBilling($encounter, $type, $code, $text, $pid, $userauthorized,
+      addBilling($encounter, $type, $code, strip_escape_custom($text), $pid, $userauthorized,
         $provid, $modifier, $units, $fee, $ndc_info);
 		}
 	}
@@ -76,11 +74,11 @@ if (isset($mode)) {
 			foreach ($procs as $proc) {
 				$justify_string = "";
 				foreach ($diags as $diag) {
-					$justify_string .= $diag . ":"; 
+					$justify_string .= $diag . ":";
 				}
-				$sql[] = "UPDATE billing set justify = concat(justify,'" . mysql_real_escape_string($justify_string)  ."') where encounter = '" . mysql_real_escape_string($_POST['encounter_id']) . "' and pid = '" . mysql_real_escape_string($_POST['patient_id']) . "' and code = '" . mysql_real_escape_string($proc) . "'";
+				$sql[] = "UPDATE billing set justify = concat(justify,'" . add_escape_custom($justify_string)  ."') where encounter = '" . add_escape_custom($_POST['encounter_id']) . "' and pid = '" . add_escape_custom($_POST['patient_id']) . "' and code = '" . add_escape_custom($proc) . "'";
 			}
-		
+
 		}
 		if (!empty($sql)) {
 			foreach ($sql as $q) {
@@ -98,9 +96,9 @@ if (isset($mode)) {
           trim($ndc['ndcqty']);
       }
       sqlStatement("UPDATE billing SET ndc_info = '$ndc_info' WHERE " .
-        "encounter = '" . mysql_real_escape_string($_POST['encounter_id']) . "' AND " .
-        "pid = '" . mysql_real_escape_string($_POST['patient_id']) . "' AND " .
-        "code = '" . mysql_real_escape_string($ndc['code']) . "'");
+        "encounter = '" . add_escape_custom($_POST['encounter_id']) . "' AND " .
+        "pid = '" . add_escape_custom($_POST['patient_id']) . "' AND " .
+        "code = '" . add_escape_custom($ndc['code']) . "'");
     }
 
   }
@@ -227,7 +225,7 @@ if ($result = getBillingByEncounter($pid,$encounter,"*") ) {
 					$iter["code"] . ']" type="checkbox" value="' . $iter[code] . '">' .
 					"</td><td><div><a target='$target' class='small' " .
           "href='diagnosis_full.php' onclick='top.restoreSession()'><b>" .
-					$iter{"code"} . "</b> " . ucwords(strtolower($iter{"code_text"})) .
+					$iter{"code"} . "</b> " . $iter{"code_text"} .
 					"</a></div></td></tr>\n";
 				$billing_html[$iter["code_type"]] .= $html;
 				$counter++;
@@ -251,7 +249,7 @@ if ($result = getBillingByEncounter($pid,$encounter,"*") ) {
 				ucwords(strtolower($iter{"code_text"})) . ' ' . oeFormatMoney($iter['fee']) .
 				"</a><span class=\"small\">";
 			$total += $iter['fee'];
-			$js = split(":",$iter['justify']);
+			$js = explode(":",$iter['justify']);
 			$counter = 0;
 			foreach ($js as $j) {
 				if(!empty($j)) {

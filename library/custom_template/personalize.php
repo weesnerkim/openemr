@@ -25,13 +25,7 @@
 //
 // +------------------------------------------------------------------------------+
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../../interface/globals.php");
 $list_id= $_REQUEST['list_id'] ? $_REQUEST['list_id']: $_REQUEST['filter_context'];
@@ -90,8 +84,8 @@ if(isset($_REQUEST['submitform']) && $_REQUEST['submitform']=='save'){
         <script src="ckeditor/_samples/sample.js" type="text/javascript"></script>
         <link href="ckeditor/_samples/sample.css" rel="stylesheet" type="text/css" />
         <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
-        <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js"></script>
-        <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery.1.3.2.js"></script>
+        <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
+        <script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-3-2/index.js"></script>
         <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery-ui-1.7.1.custom.min.js"></script>
         <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/common.js"></script>
         <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/fancybox/jquery.fancybox-1.2.6.js"></script>
@@ -390,7 +384,7 @@ if(isset($_REQUEST['submitform']) && $_REQUEST['submitform']=='save'){
                                     tu_user_id=?) ".
                                     $where.
                                     " ORDER BY cl_list_id,tu_user_id,cl_list_item_long";
-                            $resTemplates = sqlStatement($sql,$arval);        
+                            $resTemplates = sqlStatement($sql,$arval);
                             if($_REQUEST['filter_users']){
                                $sql = " SELECT * FROM template_users AS tu LEFT OUTER JOIN customlists AS c ON tu.tu_template_id=c.cl_list_slno WHERE
                                 tu.tu_user_id=? AND c.cl_list_type=3 AND cl_deleted=0 AND tu.tu_template_id NOT IN

@@ -10,14 +10,13 @@
  require_once("$srcdir/acl.inc");
  require_once("drugs.inc.php");
  require_once("$srcdir/options.inc.php");
- require_once($GLOBALS['fileroot'] . "/library/classes/class.phpmailer.php");
- require_once($GLOBALS['fileroot'] . "/library/classes/class.ezpdf.php");
+
+ $facilityService = new \services\FacilityService();
 
  function send_email($subject, $body) {
   $recipient = $GLOBALS['practice_return_email_path'];
   if (empty($recipient)) return;
   $mail = new PHPMailer();
-  $mail->SetLanguage("en", $GLOBALS['fileroot'] . "/library/" );
   $mail->From = $recipient;
   $mail->FromName = 'In-House Pharmacy';
   $mail->isMail();
@@ -57,7 +56,7 @@
   //
   if ($drug_id) {
    $sale_id = sellDrug($drug_id, $quantity, $fee, $pid, 0, $prescription_id, $today, $user);
-   if (!$sale_id) die(xl('Inventory is not available for this order.'));
+   if (!$sale_id) die(xlt('Inventory is not available for this order.'));
 
    /******************************************************************
    $res = sqlStatement("SELECT * FROM drug_inventory WHERE " .
@@ -113,15 +112,14 @@
    ")");
   *******************************************************************/
 
-  if (!$sale_id) die(xl('Internal error, no drug ID specified!'));
+  if (!$sale_id) die(xlt('Internal error, no drug ID specified!'));
 
  } // end if not $sale_id
 
  // Generate the bottle label for the sale identified by $sale_id.
 
  // Get details for what we guess is the primary facility.
- $frow = sqlQuery("SELECT * FROM facility " .
-  "ORDER BY billing_location DESC, accepts_assignment DESC, id LIMIT 1");
+ $frow = $facilityService->getPrimaryBusinessEntity(array("useLegacyImplementation" => true));
 
  // Get everything else.
  $row = sqlQuery("SELECT " .
@@ -133,12 +131,12 @@
   "u.fname AS ufname, u.mname AS umname, u.lname AS ulname " .
   "FROM drug_sales AS s, drug_inventory AS i, drugs AS d, " .
   "prescriptions AS r, patient_data AS p, users AS u WHERE " .
-  "s.sale_id = '$sale_id' AND " .
+  "s.sale_id = ? AND " .
   "i.inventory_id = s.inventory_id AND " .
   "d.drug_id = i.drug_id AND " .
   "r.id = s.prescription_id AND " .
   "p.pid = s.pid AND " .
-  "u.id = r.provider_id");
+  "u.id = r.provider_id", array($sale_id) );
 
  $dconfig = $GLOBALS['oer_config']['druglabels'];
 
@@ -177,9 +175,9 @@
  // configured properly.
  //
  if (false) { // if PDF output is desired
-  $pdf =& new Cezpdf($dconfig['paper_size']);
+  $pdf = new Cezpdf($dconfig['paper_size']);
   $pdf->ezSetMargins($dconfig['top'],$dconfig['bottom'],$dconfig['left'],$dconfig['right']);
-  $pdf->selectFont($GLOBALS['fileroot'] . "/library/fonts/Helvetica.afm");
+  $pdf->selectFont('Helvetica');
   $pdf->ezSetDy(20); // dunno why we have to do this...
   $pdf->ezText($header_text, 7, array('justification'=>'center'));
   if(!empty($dconfig['logo'])) {
@@ -193,6 +191,7 @@
  else { // HTML output
 ?>
 <html>
+<script type="text/javascript" src="<?php echo $webroot ?>/interface/main/tabs/js/include_opener.js"></script>
 <head>
 <?php html_header_show();?>
 <style type="text/css">
@@ -218,22 +217,23 @@
   padding-top: 2pt;
  }
 </style>
-<title><?php xl('Prescription Label','e') ; ?></title>
+<title><?php echo xlt('Prescription Label') ; ?></title>
 </head>
 <body leftmargin='0' topmargin='0' marginwidth='0' marginheight='0'>
 <center>
 <table border='0' cellpadding='0' cellspacing='0' style='width: 200pt'>
  <tr><td class="labtop" nowrap>
-  <?php echo nl2br($header_text); ?>
+  <?php echo nl2br(text($header_text)); ?>
  </td></tr>
  <tr><td style='background-color: #000000; height: 5pt;'></td></tr>
  <tr><td class="labbot" nowrap>
-  <?php echo nl2br($label_text); ?>
+  <?php echo nl2br(text($label_text)); ?>
  </td></tr>
 </table>
 </center>
 <script language="JavaScript">
- window.print();
+ var win = top.printLogPrint ? top : opener.top;
+ win.printLogPrint(window);
 </script>
 </body>
 </html>

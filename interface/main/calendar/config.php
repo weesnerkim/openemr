@@ -26,9 +26,10 @@ else {
 $pnconfig['modname'] = "PostCalendar";
 $pnconfig['startpage'] = "PostCalendar";
 $pnconfig['language'] = "eng";
-$pnconfig['dbtype'] = 'mysql';
+$pnconfig['dbtype'] = 'mysqli';
 $pnconfig['dbtabletype'] = 'MyISAM';
 $pnconfig['dbhost'] = $host;
+$pnconfig['dbport'] = $port;
 $pnconfig['dbuname'] = $login;
 $pnconfig['dbpass'] = $pass;
 $pnconfig['dbname'] = $dbase;
@@ -41,12 +42,12 @@ $pntable = array();
 $session_info = $prefix . '_session_info';
 $pntable['session_info'] = $session_info;
 $pntable['session_info_column'] = array (
-		'sessid'    => $session_info . 
-		'.pn_sessid', 'ipaddr'    => $session_info . 
-		'.pn_ipaddr','firstused' => $session_info . 
-		'.pn_firstused','lastused'  => $session_info . 
-		'.pn_lastused','uid'       => $session_info . 
-		'.pn_uid','vars'      => $session_info . 
+		'sessid'    => $session_info .
+		'.pn_sessid', 'ipaddr'    => $session_info .
+		'.pn_ipaddr','firstused' => $session_info .
+		'.pn_firstused','lastused'  => $session_info .
+		'.pn_lastused','uid'       => $session_info .
+		'.pn_uid','vars'      => $session_info .
 		'.pn_vars');
 // ----------------------------------------------------------------------
 // For debugging (Pablo Roca)

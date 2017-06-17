@@ -1,4 +1,4 @@
-<?php  
+<?php 
 /*
  *  $Id$
  *
@@ -74,16 +74,16 @@ define('_CALLONGFIRSTDAY', xl ('Sunday') );
 define('_CALLONGSECONDDAY', xl ('Monday') );
 define('_CALLONGTHIRDDAY', xl ('Tuesday') );
 define('_CALLONGFOURTHDAY', xl ('Wednesday') );
-define('_CALLONGFIFTHDAY', xl ('Thurdsay') );
+define('_CALLONGFIFTHDAY', xl ('Thursday') );
 define('_CALLONGSIXTHDAY', xl ('Friday') );
 define('_CALLONGSEVENTHDAY', xl ('Saturday') );
-define('_CALMONDAYSHORT', 'M');
-define('_CALTUESDAYSHORT', 'T');
-define('_CALWEDNESDAYSHORT', 'W');
-define('_CALTHURSDAYSHORT', 'T');
-define('_CALFRIDAYSHORT', 'F');
-define('_CALSATURDAYSHORT', 'S');
-define('_CALSUNDAYSHORT', 'S');
+define('_CALMONDAYSHORT', xl('M{{Monday}}') );
+define('_CALTUESDAYSHORT', xl('T{{Tuesday}}') );
+define('_CALWEDNESDAYSHORT', xl ('W{{Wednesday}}') );
+define('_CALTHURSDAYSHORT', xl ('T{{Thursday}}') );
+define('_CALFRIDAYSHORT', xl( 'F{{Friday}}') );
+define('_CALSATURDAYSHORT', xl ('S{{Saturday}}') );
+define('_CALSUNDAYSHORT',xl('S{{Sunday}}') );
 define('_CALSUNDAY', xl ('Sunday') );
 define('_CALMONDAY', xl ('Monday') );
 define('_CALTUESDAY', xl ('Tuesday') );
@@ -188,4 +188,6 @@ define('_PC_ADMIN_EVENTS_DELETED', xl ('Your event has been deleted.') );
 @ define('_NO_DIRECT_ACCESS', xl ('You can not access this function directly.') );
 define('_PC_CAT_PATIENT', xl ('Patient') );
 define('_PC_CAT_PROVIDER', xl ('Provider') );
+define('_PC_CAT_CLINIC', xl ('Clinic') );
+define('_PC_CAT_THERAPY_GROUP', xl ('Therapy group') );
 ?>

@@ -1,5 +1,5 @@
 <?php
- // Copyright (C) 2005-2006 Rod Roark <rod@sunsetsystems.com>
+ // Copyright (C) 2005-2017 Rod Roark <rod@sunsetsystems.com>
  //
  // This program is free software; you can redistribute it and/or
  // modify it under the terms of the GNU General Public License
@@ -23,10 +23,10 @@
  // Upgrade Howto
  // When upgrading to a new version of OpenEMR, run the acl_upgrade.php
  // script to update the phpGACL access controls.  This is required to
- // ensure the database includes all the required Access Control 
+ // ensure the database includes all the required Access Control
  // Objects(ACO).
  //
- 
+
  // On 06/2009, added pertinent comments below each entry to allow capture
  //  of these terms by the translation engine.
 
@@ -47,22 +47,29 @@
      // xl('Accounting')
  $gacl->add_object_section('Administration', 'admin'        , 10, 0, 'ACO');
      // xl('Administration')
- $gacl->add_object_section('Encounters'    , 'encounters'   , 10, 0, 'ACO');
+ $gacl->add_object_section('Encounters'    , 'encounters'    , 10, 0, 'ACO');
      // xl('Encounters')
- $gacl->add_object_section('Lists'         , 'lists'        , 10, 0, 'ACO');
+ $gacl->add_object_section('Lists'         , 'lists'         , 10, 0, 'ACO');
      // xl('Lists')
- $gacl->add_object_section('Patients'      , 'patients'     , 10, 0, 'ACO');
+ $gacl->add_object_section('Patients'      , 'patients'      , 10, 0, 'ACO');
      // xl('Patients')
- $gacl->add_object_section('Squads'        , 'squads'       , 10, 0, 'ACO');
+ $gacl->add_object_section('Squads'         , 'squads'         , 10, 0, 'ACO');
      // xl('Squads')
- $gacl->add_object_section('Sensitivities' , 'sensitivities', 10, 0, 'ACO');
+ $gacl->add_object_section('Sensitivities'  , 'sensitivities'  , 10, 0, 'ACO');
      // xl('Sensitivities')
- $gacl->add_object_section('Placeholder'   , 'placeholder'  , 10, 0, 'ACO');
+ $gacl->add_object_section('Placeholder'    , 'placeholder'    , 10, 0, 'ACO');
      // xl('Placeholder')
- $gacl->add_object_section('Nation Notes'   , 'nationnotes'  , 10, 0, 'ACO');
+ $gacl->add_object_section('Nation Notes'   , 'nationnotes'    , 10, 0, 'ACO');
      // xl('Nation Notes')
- $gacl->add_object_section('Patient Portal','patientportal'  , 10, 0, 'ACO');
+ $gacl->add_object_section('Patient Portal' , 'patientportal'  , 10, 0, 'ACO');
      // xl('Patient Portal')
+ $gacl->add_object_section('Menus','menus'  ,  10, 0, 'ACO');
+     // xl('Menus')
+ $gacl->add_object_section('Groups','groups',  10, 0, 'ACO');
+     // xl('Groups')
+
+
+
  // Create Accounting ACOs.
  //
  $gacl->add_object('acct', 'Billing (write optional)'           , 'bill' , 10, 0, 'ACO');
@@ -100,6 +107,8 @@
      // xl('Pharmacy Dispensary')
  $gacl->add_object('admin', 'ACL Administration'              , 'acl'      , 10, 0, 'ACO');
      // xl('ACL Administration')
+ $gacl->add_object('admin', 'Multipledb'                      ,'multipledb', 10, 0, 'ACO');
+ // xl('Multipledb')
 
  // Create ACOs for encounters.
  //
@@ -132,16 +141,21 @@
      // xl('Language List (write,addonly optional)')
  $gacl->add_object('lists', 'Ethnicity-Race List (write,addonly optional)' , 'ethrace'  , 10, 0, 'ACO');
      // xl('Ethnicity-Race List (write,addonly optional)')
- 
+
  // Create ACOs for patientportal.
  //
  $gacl->add_object('patientportal', 'Patient Portal' , 'portal'  , 10, 0, 'ACO');
      // xl('Patient Portal')
-     
+
+ // Create ACOs for modules.
+ //
+ $gacl->add_object('menus', 'Modules' , 'modle'  , 10, 0, 'ACO');
+     // xl('Modules')
+
  // Create ACOs for patients.
  //
- $gacl->add_object('patients', 'Appointments (write optional)'            , 'appt' , 10, 0, 'ACO');
-     // xl('Appointments (write optional)')
+ $gacl->add_object('patients', 'Appointments (write,wsome optional)'      , 'appt' , 10, 0, 'ACO');
+     // xl('Appointments (write,wsome optional)')
  $gacl->add_object('patients', 'Demographics (write,addonly optional)'    , 'demo' , 10, 0, 'ACO');
      // xl('Demographics (write,addonly optional)')
  $gacl->add_object('patients', 'Medical/History (write,addonly optional)' , 'med'  , 10, 0, 'ACO');
@@ -154,6 +168,30 @@
      // xl('Patient Notes (write,addonly optional)')
  $gacl->add_object('patients', 'Sign Lab Results (write,addonly optional)', 'sign'  , 10, 0, 'ACO');
      // xl('Sign Lab Results (write,addonly optional)')
+ $gacl->add_object('patients', 'Patient Reminders (write,addonly optional)','reminder', 10, 0, 'ACO');
+     // xl('Patient Reminders (write,addonly optional)')
+ $gacl->add_object('patients', 'Clinical Reminders/Alerts (write,addonly optional)','alert', 10, 0, 'ACO');
+     // xl('Clinical Reminders/Alerts (write,addonly optional)')
+ $gacl->add_object('patients', 'Disclosures (write,addonly optional)','disclosure', 10, 0, 'ACO');
+     // xl('Disclosures (write,addonly optional)')
+ $gacl->add_object('patients', 'Prescriptions (write,addonly optional)','rx', 10, 0, 'ACO');
+     // xl('Prescriptions (write,addonly optional)')
+ $gacl->add_object('patients', 'Amendments (write,addonly optional)','amendment', 10, 0, 'ACO');
+     // xl('Amendments (write,addonly optional)')
+ $gacl->add_object('patients', 'Lab Results (write,addonly optional)','lab', 10, 0, 'ACO');
+     // xl('Lab Results (write,addonly optional)')
+
+
+ $gacl->add_object('groups', 'View/Add/Update groups','gadd', 10, 0, 'ACO');
+ // xl('View/Add/Update groups')
+ $gacl->add_object('groups', 'View/Create/Update groups appointment in calendar','gcalendar', 10, 0, 'ACO');
+// xl('View/Create/Update groups appointment in calendar')
+ $gacl->add_object('groups', 'Group encounter log','glog', 10, 0, 'ACO');
+// xl('Group encounter log')
+ $gacl->add_object('groups', 'Group detailed log of appointment in patient record','gdlog', 10, 0, 'ACO');
+// xl('Group detailed log of appointment in patient record')
+ $gacl->add_object('groups', 'Send message from the permanent group therapist to the personal therapist','gm', 10, 0, 'ACO');
+ // xl('Send message from the permanent group therapist to the personal therapist')
 
  // Create ACOs for sensitivities.
  //
@@ -166,7 +204,7 @@
  //
  $gacl->add_object('placeholder', 'Placeholder (Maintains empty ACLs)', 'filler', 10, 0, 'ACO');
      // xl('Placeholder (Maintains empty ACLs)')
-     
+
  // Create ACO for nationnotes.
  //
  $gacl->add_object('nationnotes', 'Nation Notes Configure', 'nn_configure', 10, 0, 'ACO');
@@ -200,7 +238,7 @@ $breakglass  = $gacl->add_group('breakglass' , 'Emergency Login'    , $users, 'A
  // If this script is being used by OpenEMR's setup, then will
  //   incorporate the installation values. Otherwise will
 //    hardcode the 'admin' user.
- if ( isset($this->iuser) ) {
+ if (isset($this) && isset($this->iuser)) {
   $gacl->add_object('users', $this->iuname, $this->iuser, 10, 0, 'ARO');
   $gacl->add_group_object($admin, 'users', $this->iuser, 'ARO');
  }
@@ -210,20 +248,22 @@ $breakglass  = $gacl->add_group('breakglass' , 'Emergency Login'    , $users, 'A
  }
 
  // Declare return terms for language translations
- //  xl('write') xl('wsome') xl('addonly')
+ //  xl('write') xl('wsome') xl('addonly') xl('view')
 
  // Set permissions for administrators.
  //
  $gacl->add_acl(
   array(
    'acct'=>array('bill', 'disc', 'eob', 'rep', 'rep_a'),
-   'admin'=>array('calendar', 'database', 'forms', 'practice', 'superbill', 'users', 'batchcom', 'language', 'super', 'drugs', 'acl'),
+   'admin'=>array('calendar', 'database', 'forms', 'practice', 'superbill', 'users', 'batchcom', 'language', 'super', 'drugs', 'acl','multipledb'),
    'encounters'=>array('auth_a', 'coding_a', 'notes_a', 'date_a'),
    'lists'=>array('default','state','country','language','ethrace'),
    'patients'=>array('appt', 'demo', 'med', 'trans', 'docs', 'notes'),
    'sensitivities'=>array('normal', 'high'),
    'nationnotes'=>array('nn_configure'),
-   'patientportal'=>array('portal')
+   'patientportal'=>array('portal'),
+   'menus'=>array('modle'),
+   'groups'=>array('gadd','gcalendar','glog','gdlog','gm')
   ),
   NULL, array($admin), NULL, NULL,
   1, 1, 'write', 'Administrators can do anything'
@@ -237,15 +277,33 @@ $breakglass  = $gacl->add_group('breakglass' , 'Emergency Login'    , $users, 'A
    'placeholder'=>array('filler')
   ),
   NULL, array($doc), NULL, NULL,
+  1, 1, 'view', 'Things that physicians can only read'
+ );
+     // xl('Things that physicians can only read')
+ $gacl->add_acl(
+  array(
+   'placeholder'=>array('filler')
+  ),
+  NULL, array($doc), NULL, NULL,
   1, 1, 'addonly', 'Things that physicians can read and enter but not modify'
  );
      // xl('Things that physicians can read and enter but not modify')
  $gacl->add_acl(
   array(
+   'placeholder'=>array('filler')
+  ),
+  NULL, array($doc), NULL, NULL,
+  1, 1, 'wsome', 'Things that physicians can read and partly modify'
+ );
+     // xl('Things that physicians can read and partly modify')
+
+ $gacl->add_acl(
+  array(
    'acct'=>array('disc', 'rep'),
    'admin'=>array('drugs'),
    'encounters'=>array('auth_a', 'coding_a', 'notes_a', 'date_a'),
-   'patients'=>array('appt', 'demo', 'med', 'trans', 'docs', 'notes', 'sign'),
+   'patients' => array('appt', 'demo', 'med', 'trans', 'docs', 'notes', 'sign', 'reminder', 'alert',
+     'disclosure', 'rx', 'amendment', 'lab'),
    'sensitivities'=>array('normal', 'high')
   ),
   NULL, array($doc), NULL, NULL,
@@ -257,6 +315,14 @@ $breakglass  = $gacl->add_group('breakglass' , 'Emergency Login'    , $users, 'A
  //
  $gacl->add_acl(
   array(
+   'placeholder'=>array('filler')
+  ),
+  NULL, array($clin), NULL, NULL,
+  1, 1, 'view', 'Things that clinicians can only read'
+ );
+     // xl('Things that clinicians can only read')
+ $gacl->add_acl(
+  array(
    'encounters'=>array('notes', 'relaxed'),
    'patients'=>array('demo', 'med', 'docs', 'notes'),
    'sensitivities'=>array('normal')
@@ -265,6 +331,15 @@ $breakglass  = $gacl->add_group('breakglass' , 'Emergency Login'    , $users, 'A
   1, 1, 'addonly', 'Things that clinicians can read and enter but not modify'
  );
      // xl('Things that clinicians can read and enter but not modify')
+
+ $gacl->add_acl(
+  array(
+   'placeholder'=>array('filler')
+  ),
+  NULL, array($clin), NULL, NULL,
+  1, 1, 'wsome', 'Things that clinicians can read and partly modify'
+ );
+     // xl('Things that clinicians can read and partly modify')
  $gacl->add_acl(
   array(
    'admin'=>array('drugs'),
@@ -283,9 +358,25 @@ $breakglass  = $gacl->add_group('breakglass' , 'Emergency Login'    , $users, 'A
    'placeholder'=>array('filler')
   ),
   NULL, array($front), NULL, NULL,
+  1, 1, 'view', 'Things that front office can only read'
+ );
+     // xl('Things that front office can only read')
+ $gacl->add_acl(
+  array(
+   'placeholder'=>array('filler')
+  ),
+  NULL, array($front), NULL, NULL,
   1, 1, 'addonly', 'Things that front office can read and enter but not modify'
  );
      // xl('Things that front office can read and enter but not modify')
+ $gacl->add_acl(
+  array(
+   'placeholder'=>array('filler')
+  ),
+  NULL, array($front), NULL, NULL,
+  1, 1, 'wsome', 'Things that front office can read and partly modify'
+ );
+     // xl('Things that front office can read and partly modify')
  $gacl->add_acl(
   array(
    'patients'=>array('appt', 'demo', 'trans', 'notes')
@@ -302,9 +393,25 @@ $breakglass  = $gacl->add_group('breakglass' , 'Emergency Login'    , $users, 'A
    'placeholder'=>array('filler')
   ),
   NULL, array($back), NULL, NULL,
+  1, 1, 'view', 'Things that back office can only read'
+ );
+     // xl('Things that back office can only read')
+ $gacl->add_acl(
+  array(
+   'placeholder'=>array('filler')
+  ),
+  NULL, array($back), NULL, NULL,
   1, 1, 'addonly', 'Things that back office can read and enter but not modify'
  );
      // xl('Things that back office can read and enter but not modify')
+ $gacl->add_acl(
+  array(
+   'placeholder'=>array('filler')
+  ),
+  NULL, array($back), NULL, NULL,
+  1, 1, 'wsome', 'Things that back office can read and partly modify'
+ );
+     // xl('Things that back office can read and partly modify')
  $gacl->add_acl(
   array(
    'acct'=>array('bill', 'disc', 'eob', 'rep', 'rep_a'),
@@ -316,6 +423,7 @@ $breakglass  = $gacl->add_group('breakglass' , 'Emergency Login'    , $users, 'A
   1, 1, 'write', 'Things that back office can read and modify'
  );
      // xl('Things that back office can read and modify')
+
  // Set permissions for Emergency Login.
  //
  $gacl->add_acl(
@@ -327,7 +435,8 @@ $breakglass  = $gacl->add_group('breakglass' , 'Emergency Login'    , $users, 'A
    'patients'=>array('appt', 'demo', 'med', 'trans', 'docs', 'notes'),
    'sensitivities'=>array('normal', 'high'),
    'nationnotes'=>array('nn_configure'),
-   'patientportal'=>array('portal')
+   'patientportal'=>array('portal'),
+   'menus'=>array('modle')
   ),
   NULL, array($breakglass), NULL, NULL,
   1, 1, 'write', 'Emergency Login user can do anything'

@@ -23,9 +23,13 @@ class Controller_edit extends BaseController {
         $ruleId = _post('id');
         $types = _post('fld_ruleTypes');
         $title = _post('fld_title');
+        $developer = _post('fld_developer');
+        $funding = _post('fld_funding_source');
+        $release = _post('fld_release');
+        $web_ref = _post('fld_web_reference');
         if ( is_null($rule_id)) {
             // its a new rule submit
-            $ruleId = $this->getRuleManager()->updateSummary( $ruleId, $types, $title );
+            $ruleId = $this->getRuleManager()->updateSummary( $ruleId, $types, $title, $developer, $funding, $release, $web_ref );
 
             // redirect to the intervals page
             $this->redirect("index.php?action=edit!intervals&id=$ruleId");
@@ -68,7 +72,7 @@ class Controller_edit extends BaseController {
         if ( $change ) {
             $this->getRuleManager()->updateIntervals( $rule, $intervals );
         }
-        
+
         $this->redirect("index.php?action=detail!view&id=$ruleId");
     }
 
@@ -127,17 +131,17 @@ class Controller_edit extends BaseController {
     }
 
     function _action_categories() {
-        $stmts = sqlStatement( "SELECT option_id, title FROM list_options WHERE list_id='rule_action_category'" );
+        $stmts = sqlStatement( "SELECT option_id, title FROM list_options WHERE list_id = 'rule_action_category' AND activity = 1");
         for($iter=0; $row=sqlFetchArray($stmts); $iter++) {
-            $columns[] = array( "code" => $row['option_id'], "lbl" => $row['title'] );
+            $columns[] = array( "code" => $row['option_id'], "lbl" => xl_list_label($row['title']) );
         }
         $this->emit_json($columns);
     }
 
     function _action_items() {
-        $stmts = sqlStatement( "SELECT option_id, title FROM list_options WHERE list_id='rule_action'" );
+        $stmts = sqlStatement( "SELECT option_id, title FROM list_options WHERE list_id = 'rule_action' AND activity = 1");
         for($iter=0; $row=sqlFetchArray($stmts); $iter++) {
-            $columns[] = array( "code" => $row['option_id'], "lbl" => $row['title'] );
+            $columns[] = array( "code" => $row['option_id'], "lbl" => xl_list_label($row['title']) );
         }
         $this->emit_json($columns);
     }
@@ -180,7 +184,7 @@ class Controller_edit extends BaseController {
             } else {
                 $this->ruleManager->updateTargetCriteria( $rule, $criteria );
             }
-        } 
+        }
         $this->redirect("index.php?action=detail!view&id=$ruleId");
     }
 
@@ -286,7 +290,7 @@ class Controller_edit extends BaseController {
         if ( $type == "target") {
             $criteria = $this->getRuleManager()->createTargetRuleCriteria( $rule, $criteriaType );
         }
-        
+
         $criteria->groupId = $groupId;
         $this->viewBean->type = $type;
         $this->viewBean->rule = $rule;
@@ -296,6 +300,6 @@ class Controller_edit extends BaseController {
 
         $this->set_view( $criteria->getView(), "criteria.php" );
     }
-    
+
 }
 ?>

@@ -1,18 +1,35 @@
 <?php
-// Copyright (C) 2009-2011 Rod Roark <rod@sunsetsystems.com>
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * Copyright (C) 2009-2017 Rod Roark <rod@sunsetsystems.com>
+ * Copyright (C) 2017 Brady Miller <brady.g.miller@gmail.com>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>.
+ *
+ * @package OpenEMR
+ * @author  Rod Roark <rod@sunsetsystems.com>
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @link    http://www.open-emr.org
+ */
+
+
 
 require_once("../../globals.php");
 require_once("$srcdir/api.inc");
 require_once("$srcdir/forms.inc");
 require_once("$srcdir/options.inc.php");
 require_once("$srcdir/patient.inc");
-require_once("$srcdir/formdata.inc.php");
-require_once("$srcdir/formatting.inc.php");
+if ($GLOBALS['gbl_portal_cms_enable']) {
+  require_once("$include_root/cmsportal/portal.inc.php");
+}
 
 $CPR = 4; // cells per row
 
@@ -27,9 +44,11 @@ if (empty($is_lbf) && !$encounter) {
 function end_cell() {
   global $item_count, $cell_count, $historical_ids;
   if ($item_count > 0) {
+    // echo "&nbsp;</td>";
     echo "</td>";
 
     foreach ($historical_ids as $key => $dummy) {
+      // $historical_ids[$key] .= "&nbsp;</td>";
       $historical_ids[$key] .= "</td>";
     }
 
@@ -63,79 +82,161 @@ function end_group() {
     end_row();
     echo " </table>\n";
     // No div for an empty group name.
-    if (strlen($last_group) > 1) echo "</div>\n";
+    if (strlen($last_group) > 1) {
+      echo "</div>\n"; // div after checkbox
+      echo "</div>\n"; // outer div, including checkbox
+    }
   }
 }
 
-$formname = formData('formname', 'G');
-$formid   = 0 + formData('id', 'G');
+$formname = isset($_GET['formname']) ? $_GET['formname'] : '';
+$formid   = isset($_GET['id']      ) ? intval($_GET['id']) : 0;
+$portalid = isset($_GET['portalid']) ? intval($_GET['portalid']) : 0;
 
-// Get title and number of history columns for this form.
-$tmp = sqlQuery("SELECT title, option_value FROM list_options WHERE " .
-  "list_id = 'lbfnames' AND option_id = '$formname'");
+// Get some info about this form.
+$tmp = sqlQuery("SELECT title, option_value, notes FROM list_options WHERE " .
+  "list_id = 'lbfnames' AND option_id = ? AND activity = 1", array($formname));
 $formtitle = $tmp['title'];
 $formhistory = 0 + $tmp['option_value'];
 
-$newid = 0;
+// Extract parameters from this form's list item entry.
+$jobj = json_decode($tmp['notes'], true);
+if (!empty($jobj['columns'])) $CPR = intval($jobj['columns']);
+if (!empty($jobj['issue'  ])) $LBF_ISSUE_TYPE = $jobj['issue'];
+if (!empty($jobj['aco'    ])) $LBF_ACO = explode('|', $jobj['aco']);
 
-// If Save was clicked, save the info.
-//
-if ($_POST['bn_save']) {
-  $sets = "";
-  $fres = sqlStatement("SELECT * FROM layout_options " .
-    "WHERE form_id = '$formname' AND uor > 0 AND field_id != '' AND " .
-    "edit_options != 'H' " .
-    "ORDER BY group_name, seq");
-  while ($frow = sqlFetchArray($fres)) {
-    $field_id  = $frow['field_id'];
-    $value = get_layout_form_value($frow);
-    if ($formid) { // existing form
-      if ($value === '') {
-        $query = "DELETE FROM lbf_data WHERE " .
-          "form_id = '$formid' AND field_id = '$field_id'";
-      }
-      else {
-        $query = "REPLACE INTO lbf_data SET field_value = '$value', " .
-          "form_id = '$formid', field_id = '$field_id'";
-      }
-      sqlStatement($query);
-    }
-    else { // new form
-      if ($value !== '') {
-        if ($newid) {
-          sqlStatement("INSERT INTO lbf_data " .
-            "( form_id, field_id, field_value ) " .
-            " VALUES ( '$newid', '$field_id', '$value' )");
-        }
-        else {
-          $newid = sqlInsert("INSERT INTO lbf_data " .
-            "( field_id, field_value ) " .
-            " VALUES ( '$field_id', '$value' )");
-        }
-      }
-      // Note that a completely empty form will not be created at all!
-    }
+// Check access control.
+if (!acl_check('admin', 'super') && !empty($LBF_ACO)) {
+  $auth_aco_write   = acl_check($LBF_ACO[0], $LBF_ACO[1], '', 'write'  );
+  $auth_aco_addonly = acl_check($LBF_ACO[0], $LBF_ACO[1], '', 'addonly');
+  if (!$auth_aco_write && !($auth_aco_addonly && !$formid)) {
+    die(xlt('Access denied'));
   }
-
-  if (!$formid && $newid) {
-    addForm($encounter, $formtitle, $newid, $formname, $pid, $userauthorized);
-  }
-
-  formHeader("Redirecting....");
-  formJump();
-  formFooter();
-  exit;
 }
 
 if (empty($is_lbf)) {
   $fname = $GLOBALS['OE_SITE_DIR'] . "/LBF/$formname.plugin.php";
   if (file_exists($fname)) include_once($fname);
 }
+
+// If Save was clicked, save the info.
+//
+if ($_POST['bn_save']) {
+  $newid = 0;
+  if (!$formid) {
+    // Creating a new form. Get the new form_id by inserting and deleting a dummy row.
+    // This is necessary to create the form instance even if it has no native data.
+    $newid = sqlInsert("INSERT INTO lbf_data " .
+      "( field_id, field_value ) VALUES ( '', '' )");
+    sqlStatement("DELETE FROM lbf_data WHERE form_id = ? AND " .
+      "field_id = ''", array($newid));
+    addForm($encounter, $formtitle, $newid, $formname, $pid, $userauthorized);
+  }
+  $sets = "";
+  $fres = sqlStatement("SELECT * FROM layout_options " .
+    "WHERE form_id = ? AND uor > 0 AND field_id != '' AND " .
+    "edit_options != 'H' AND edit_options NOT LIKE '%0%' " .
+    "ORDER BY group_name, seq", array($formname) );
+  while ($frow = sqlFetchArray($fres)) {
+    $field_id  = $frow['field_id'];
+    $data_type = $frow['data_type'];
+    // If the field was not in the web form, skip it.
+    // Except if it's checkboxes, if unchecked they are not returned.
+    //
+    // if ($data_type != 21 && !isset($_POST["form_$field_id"])) continue;
+    //
+    // The above statement commented out 2015-01-12 because a LBF plugin might conditionally
+    // disable a field that is not applicable, and we need the ability to clear out the old
+    // garbage in there so it does not show up in the "report" view of the data.  So we will
+    // trust that it's OK to clear any field that is defined in the layout but not returned
+    // by the form.
+    //
+    $value = get_layout_form_value($frow);
+    // If edit option P or Q, save to the appropriate different table and skip the rest.
+    $source = $frow['source'];
+    if ($source == 'D' || $source == 'H') {
+      // Save to patient_data, employer_data or history_data.
+      if ($source == 'H') {
+        $new = array($field_id => $value);
+        updateHistoryData($pid, $new);
+      }
+      else if (strpos($field_id, 'em_') === 0) {
+        $field_id = substr($field_id, 3);
+        $new = array($field_id => $value);
+        updateEmployerData($pid, $new);
+      }
+      else {
+        $esc_field_id = escape_sql_column_name($field_id, array('patient_data'));
+        sqlStatement("UPDATE patient_data SET `$esc_field_id` = ? WHERE pid = ?",
+          array($value, $pid));
+      }
+      continue;
+    }
+    else if ($source == 'E') {
+      // Save to shared_attributes. Can't delete entries for empty fields because with the P option
+      // it's important to know when a current empty value overrides a previous value.
+      sqlStatement("REPLACE INTO shared_attributes SET " .
+        "pid = ?, encounter = ?, field_id = ?, last_update = NOW(), " .
+        "user_id = ?, field_value = ?",
+        array($pid, $encounter, $field_id, $_SESSION['authUserID'], $value));
+      continue;
+    }
+    else if ($source == 'V') {
+      // Save to form_encounter.
+      $esc_field_id = escape_sql_column_name($field_id, array('form_encounter'));
+      sqlStatement("UPDATE form_encounter SET `$esc_field_id` = ? WHERE " .
+        "pid = ? AND encounter = ?",
+        array($value, $pid, $encounter));
+      continue;
+    }
+    // It's a normal form field, save to lbf_data.
+    if ($formid) { // existing form
+      if ($value === '') {
+        $query = "DELETE FROM lbf_data WHERE " .
+          "form_id = ? AND field_id = ?";
+        sqlStatement($query, array($formid, $field_id));
+      }
+      else {
+        $query = "REPLACE INTO lbf_data SET field_value = ?, " .
+          "form_id = ?, field_id = ?";
+        sqlStatement($query,array($value, $formid, $field_id));
+      }
+    }
+    else { // new form
+      if ($value !== '') {
+        sqlStatement("INSERT INTO lbf_data " .
+          "( form_id, field_id, field_value ) VALUES ( ?, ?, ? )",
+          array($newid, $field_id, $value));
+      }
+    }
+  }
+
+  if ($portalid) {
+    // Delete the request from the portal.
+    $result = cms_portal_call(array('action' => 'delpost', 'postid' => $portalid));
+    if ($result['errmsg']) {
+      die(text($result['errmsg']));
+    }
+  }
+
+  // Support custom behavior at save time, such as going to another form.
+  if (function_exists($formname . '_save_exit')) {
+    if (call_user_func($formname . '_save_exit')) exit;
+  }
+  formHeader("Redirecting....");
+  formJump();
+  formFooter();
+  exit;
+}
+
 ?>
 <html>
 <head>
 <?php html_header_show();?>
-<link rel=stylesheet href="<?echo $css_header;?>" type="text/css">
+<link rel=stylesheet href="<?php echo $css_header;?>" type="text/css">
+<link rel="stylesheet" type="text/css" href="<?php echo $GLOBALS['webroot'] ?>/library/js/fancybox/jquery.fancybox-1.2.6.css" media="screen" />
+<link rel="stylesheet" href="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-datetimepicker-2-5-4/build/jquery.datetimepicker.min.css">
+
 <style>
 
 td, input, select, textarea {
@@ -153,42 +254,77 @@ div.section {
 
 </style>
 
-<style type="text/css">@import url(../../../library/dynarch_calendar.css);</style>
-
-<link rel="stylesheet" type="text/css" href="<?php echo $GLOBALS['webroot'] ?>/library/js/fancybox/jquery.fancybox-1.2.6.css" media="screen" />
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js"></script>
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery.1.3.2.js"></script>
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/common.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-7-2/index.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/common.js?v=<?php echo $v_js_includes; ?>"></script>
 <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/fancybox/jquery.fancybox-1.2.6.js"></script>
 <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery-ui.js"></script>
 <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery.easydrag.handler.beta2.js"></script>
-<script type="text/javascript" src="../../../library/textformat.js"></script>
-<script type="text/javascript" src="../../../library/dynarch_calendar.js"></script>
-<?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
-<script type="text/javascript" src="../../../library/dynarch_calendar_setup.js"></script>
+<script type="text/javascript" src="../../../library/textformat.js?v=<?php echo $v_js_includes; ?>"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-datetimepicker-2-5-4/build/jquery.datetimepicker.full.min.js"></script>
+
+<?php include_once("{$GLOBALS['srcdir']}/options.js.php"); ?>
+
+<!-- LiterallyCanvas support -->
+<?php echo lbf_canvas_head(); ?>
 
 <script language="JavaScript">
-$(document).ready(function(){
-// fancy box
-    if(window.enable_modals){
-	enable_modals();
-	}
-	if(window.tabbify){
+
+// Support for beforeunload handler.
+var somethingChanged = false;
+
+$(document).ready(function() {
+
+  // fancy box
+  if (window.enable_modals) {
+    enable_modals();
+  }
+  if(window.tabbify){
     tabbify();
-	}
-    // special size for
-	$(".iframe_medium").fancybox( {
-		'overlayOpacity' : 0.0,
-		'showCloseButton' : true,
-		'frameHeight' : 580,
-		'frameWidth' : 900
-	});
-	
-	$(function(){
-		// add drag and drop functionality to fancybox
-		$("#fancy_outer").easydrag();
-	});
+  }
+  if (window.checkSkipConditions) {
+    checkSkipConditions();
+  }
+  // special size for
+  $(".iframe_medium").fancybox({
+    'overlayOpacity' : 0.0,
+    'showCloseButton' : true,
+    'frameHeight' : 580,
+    'frameWidth' : 900
+  });
+  $(function() {
+    // add drag and drop functionality to fancybox
+    $("#fancy_outer").easydrag();
+  });
+
+  // Support for beforeunload handler.
+  $('.lbfdata input, .lbfdata select, .lbfdata textarea').change(function() {
+    somethingChanged = true;
+  });
+  window.addEventListener("beforeunload", function (e) {
+    if (somethingChanged && !top.timed_out) {
+      var msg = "<?php echo xls('You have unsaved changes.'); ?>";
+      e.returnValue = msg;     // Gecko, Trident, Chrome 34+
+      return msg;              // Gecko, WebKit, Chrome <34
+    }
+  });
+
+  $('.datepicker').datetimepicker({
+    <?php $datetimepicker_timepicker = false; ?>
+    <?php $datetimepicker_showseconds = false; ?>
+    <?php $datetimepicker_formatInput = false; ?>
+    <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+    <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+  });
+  $('.datetimepicker').datetimepicker({
+    <?php $datetimepicker_timepicker = true; ?>
+    <?php $datetimepicker_showseconds = false; ?>
+    <?php $datetimepicker_formatInput = false; ?>
+    <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+    <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+  });
 });
+
 var mypcc = '<?php echo $GLOBALS['phone_country_code'] ?>';
 
 // Supports customizable forms.
@@ -202,23 +338,64 @@ function divclick(cb, divid) {
  return true;
 }
 
+// The ID of the input element to receive a found code.
+var current_sel_name = '';
+
 // This is for callback by the find-code popup.
 // Appends to or erases the current list of related codes.
 function set_related(codetype, code, selector, codedesc) {
- var frc = document.getElementById('form_related_code');
+ var f = document.forms[0];
+ // frc will be the input element containing the codes.
+ // frcd, if set, will be the input element containing their descriptions.
+ var frc = f[current_sel_name];
+ var frcd;
+ var matches = current_sel_name.match(/^(.*)__desc$/);
+ if (matches) {
+  frcd = frc;
+  frc  = f[matches[1]];
+ }
  var s = frc.value;
+ var sd = frcd ? frcd.value : s;
  if (code) {
-  if (s.length > 0) s += ';';
-  s += codetype + ':' + code;
+  if (s.length > 0) {
+   s  += ';';
+   sd += ';';
+  }
+  s  += codetype + ':' + code;
+  sd += codedesc;
  } else {
-  s = '';
+  s  = '';
+  sd = '';
  }
  frc.value = s;
+ if (frcd) frcd.value = sd;
+ return '';
 }
 
 // This invokes the find-code popup.
-function sel_related() {
- dlgopen('<?php echo $rootdir ?>/patient_file/encounter/find_code_popup.php', '_blank', 500, 400);
+function sel_related(elem, codetype) {
+ current_sel_name = elem.name;
+ var url = '<?php echo $rootdir ?>/patient_file/encounter/find_code_popup.php';
+ if (codetype) url += '?codetype=' + codetype;
+ dlgopen(url, '_blank', 500, 400);
+}
+
+// Compute the length of a string without leading and trailing spaces.
+function trimlen(s) {
+ var i = 0;
+ var j = s.length - 1;
+ for (; i <= j && s.charAt(i) == ' '; ++i);
+ for (; i <= j && s.charAt(j) == ' '; --j);
+ if (i > j) return 0;
+ return j + 1 - i;
+}
+
+// Validation logic for form submission.
+function validate(f) {
+<?php generate_layout_validation($formname); ?>
+ somethingChanged = false; // turn off "are you sure you want to leave"
+ top.restoreSession();
+ return true;
 }
 
 <?php if (function_exists($formname . '_javascript')) call_user_func($formname . '_javascript'); ?>
@@ -227,21 +404,34 @@ function sel_related() {
 </head>
 
 <body <?php echo $top_bg_line; ?> topmargin="0" rightmargin="0" leftmargin="2" bottommargin="0" marginwidth="2" marginheight="0">
-<form method="post" action="<?php echo $rootdir ?>/forms/LBF/new.php?formname=<?php echo $formname ?>&id=<?php echo $formid ?>"
- onsubmit="return top.restoreSession()">
 
 <?php
+  echo "<form method='post' " .
+       "action='$rootdir/forms/LBF/new.php?formname=$formname&id=$formid&portalid=$portalid' " .
+       "onsubmit='return validate(this)'>\n";
+
+  $cmsportal_login = '';
+  $portalres = FALSE;
   if (empty($is_lbf)) {
-    $enrow = sqlQuery("SELECT p.fname, p.mname, p.lname, fe.date FROM " .
+    $enrow = sqlQuery("SELECT p.fname, p.mname, p.lname, p.cmsportal_login, " .
+      "fe.date FROM " .
       "form_encounter AS fe, forms AS f, patient_data AS p WHERE " .
-      "p.pid = '$pid' AND f.pid = '$pid' AND f.encounter = '$encounter' AND " .
+      "p.pid = ? AND f.pid = p.pid AND f.encounter = ? AND " .
       "f.formdir = 'newpatient' AND f.deleted = 0 AND " .
-      "fe.id = f.form_id LIMIT 1");
+      "fe.id = f.form_id LIMIT 1", array($pid, $encounter));
     echo "<p class='title' style='margin-top:8px;margin-bottom:8px;text-align:center'>\n";
-    echo "$formtitle " . xl('for') . ' ';
-    echo $enrow['fname'] . ' ' . $enrow['mname'] . ' ' . $enrow['lname'];
-    echo ' ' . htmlspecialchars(xl('on')) . ' ' . substr($enrow['date'], 0, 10);
+    echo text($formtitle) . " " . xlt('for') . ' ';
+    echo text($enrow['fname']) . ' ' . text($enrow['mname']) . ' ' . text($enrow['lname']);
+    echo ' ' . xlt('on') . ' ' . text(oeFormatShortDate(substr($enrow['date'], 0, 10)));
     echo "</p>\n";
+    $cmsportal_login = $enrow['cmsportal_login'];
+  }
+  // If loading data from portal, get the data.
+  if ($GLOBALS['gbl_portal_cms_enable'] && $portalid) {
+    $portalres = cms_portal_call(array('action' => 'getpost', 'postid' => $portalid));
+    if ($portalres['errmsg']) {
+      die(text($portalres['errmsg']));
+    }
   }
 ?>
 
@@ -252,8 +442,8 @@ function sel_related() {
   $shrow = getHistoryData($pid);
 
   $fres = sqlStatement("SELECT * FROM layout_options " .
-    "WHERE form_id = '$formname' AND uor > 0 " .
-    "ORDER BY group_name, seq");
+    "WHERE form_id = ? AND uor > 0 " .
+    "ORDER BY group_name, seq", array($formname) );
   $last_group = '';
   $cell_count = 0;
   $item_count = 0;
@@ -269,6 +459,8 @@ function sel_related() {
   // True if any data items in this form can be graphed.
   $form_is_graphable = false;
 
+  $condition_str = '';
+
   while ($frow = sqlFetchArray($fres)) {
     $this_group = $frow['group_name'];
     $titlecols  = $frow['titlecols'];
@@ -277,9 +469,25 @@ function sel_related() {
     $field_id   = $frow['field_id'];
     $list_id    = $frow['list_id'];
     $edit_options = $frow['edit_options'];
+    $source       = $frow['source'];
 
     $graphable  = strpos($edit_options, 'G') !== FALSE;
     if ($graphable) $form_is_graphable = true;
+
+    // Accumulate skip conditions into a JavaScript string literal.
+    $conditions = empty($frow['conditions']) ? array() : unserialize($frow['conditions']);
+    foreach ($conditions as $condition) {
+      if (empty($condition['id'])) continue;
+      $andor = empty($condition['andor']) ? '' : $condition['andor'];
+      if ($condition_str) $condition_str .= ",\n";
+      $condition_str .= "{" .
+        "target:'"   . addslashes($field_id)              . "', " .
+        "id:'"       . addslashes($condition['id'])       . "', " .
+        "itemid:'"   . addslashes($condition['itemid'])   . "', " .
+        "operator:'" . addslashes($condition['operator']) . "', " .
+        "value:'"    . addslashes($condition['value'])    . "', " .
+        "andor:'"    . addslashes($andor)                 . "'}";
+    }
 
     $currvalue  = '';
 
@@ -287,18 +495,42 @@ function sel_related() {
       // This data comes from static history
       if (isset($shrow[$field_id])) $currvalue = $shrow[$field_id];
     } else {
-      if ($formid) {
-        $pprow = sqlQuery("SELECT field_value FROM lbf_data WHERE " .
-          "form_id = '$formid' AND field_id = '$field_id'");
-        if (!empty($pprow)) $currvalue = $pprow['field_value'];
+      if (!$formid && $portalres) {
+        // Copying CMS Portal form data into this field if appropriate.
+        $currvalue = cms_field_to_lbf($data_type, $field_id, $portalres['fields']);
       }
-      else {
-        // New form, see if there is a custom default from a plugin.
-        $fname = $formname . '_default_' . $field_id;
-        if (function_exists($fname)) {
-          $currvalue = call_user_func($fname);
+      if ($currvalue === '') {
+        $currvalue = lbf_current_value($frow, $formid, $is_lbf ? 0 : $encounter);
+      }
+      if ($currvalue === FALSE) continue; // column does not exist, should not happen
+      // Handle "P" edit option to default to the previous value of a form field.
+      if (!$is_lbf && empty($currvalue) && strpos($edit_options, 'P') !== FALSE) {
+        if ($source == 'F' && !$formid) {
+          // Form attribute for new form, get value from most recent form instance.
+          // Form attributes of existing forms are expected to have existing values.
+          $tmp = sqlQuery("SELECT encounter, form_id FROM forms WHERE " .
+            "pid = ? AND formdir = ? AND deleted = 0 " .
+            "ORDER BY date DESC LIMIT 1",
+            array($pid, $formname));
+          if (!empty($tmp['encounter'])) {
+            $currvalue = lbf_current_value($frow, $tmp['form_id'], $tmp['encounter']);
+          }
         }
-      }
+        else if ($source == 'E') {
+          // Visit attribute, get most recent value as of this visit.
+          // Even if the form already exists for this visit it may have a readonly value that only
+          // exists in a previous visit and was created from a different form.
+          $tmp = sqlQuery("SELECT sa.field_value FROM form_encounter AS e1 " .
+            "JOIN form_encounter AS e2 ON " .
+            "e2.pid = e1.pid AND (e2.date < e1.date OR (e2.date = e1.date AND e2.encounter <= e1.encounter)) " .
+            "JOIN shared_attributes AS sa ON " .
+            "sa.pid = e2.pid AND sa.encounter = e2.encounter AND sa.field_id = ?" .
+            "WHERE e1.pid = ? AND e1.encounter = ? " .
+            "ORDER BY e2.date DESC, e2.encounter DESC LIMIT 1",
+            array($field_id, $pid, $encounter));
+          if (isset($tmp['field_value'])) $currvalue = $tmp['field_value'];
+        }
+      } // End "P" option logic.
     }
 
     // Handle a data category (group) change.
@@ -310,23 +542,28 @@ function sel_related() {
 
       // If group name is blank, no checkbox or div.
       if (strlen($this_group) > 1) {
-        echo "<br /><span class='bold'><input type='checkbox' name='form_cb_$group_seq' value='1' " .
-          "onclick='return divclick(this,\"div_$group_seq\");'";
+        echo "<div id='outerdiv_" . attr($group_seq) . "'>\n";
+        echo "<br /><span class='bold'><input type='checkbox' name='form_cb_" . attr($group_seq) . "' value='1' " .
+          "onclick='return divclick(this,\"div_" . attr(addslashes($group_seq)) . "\");'";
         if ($display_style == 'block') echo " checked";
-        echo " /><b>" . htmlspecialchars(xl_layout_label($group_name)) . "</b></span>\n";
-        echo "<div id='div_$group_seq' class='section' style='display:$display_style;'>\n";
+        echo " /><b>" . text(xl_layout_label($group_name)) . "</b></span>\n";
+        echo "<div id='div_" . attr($group_seq) . "' class='section' style='display:" . attr($display_style) . ";'>\n";
       }
       // echo " <table border='0' cellpadding='0' width='100%'>\n";
-      echo " <table border='0' cellpadding='0' width='100%'>\n";
+      echo " <table border='0' cellspacing='0' cellpadding='0' width='100%' class='lbfdata'>\n";
       $display_style = 'none';
 
       // Initialize historical data array and write date headers.
       $historical_ids = array();
       if ($formhistory > 0) {
         echo " <tr>";
-        echo "<td colspan='$CPR' align='right' class='bold'>";
-        if (empty($is_lbf)) echo htmlspecialchars(xl('Current'));
-        echo "</td>\n";
+        echo "<td colspan='" . attr($CPR) . "' align='right' class='bold'>";
+        if (empty($is_lbf)){
+            // Including actual date per IPPF request 2012-08-23.
+            echo oeFormatShortDate(substr($enrow['date'], 0, 10));
+            echo ' (' . htmlspecialchars(xl('Current')) . ')';
+        }
+        echo "&nbsp;</td>\n";
         $hres = sqlStatement("SELECT f.form_id, fe.date " .
           "FROM forms AS f, form_encounter AS fe WHERE " .
           "f.pid = ? AND f.formdir = ? AND " .
@@ -339,9 +576,9 @@ function sel_related() {
         // We sort these sensibly, however only the encounter date is shown here;
         // at some point we may wish to show also the data entry date/time.
         while ($hrow = sqlFetchArray($hres)) {
+          echo "<td colspan='" . attr($CPR) . "' align='right' class='bold'>&nbsp;" .
+            text(oeFormatShortDate(substr($hrow['date'], 0, 10))) . "</td>\n";
           $historical_ids[$hrow['form_id']] = '';
-          echo "<td colspan='$CPR' align='right' class='bold'>&nbsp;" .
-            oeFormatShortDate(substr($hrow['date'], 0, 10)) . "</td>\n";
         }
         echo " </tr>";
       }
@@ -360,20 +597,24 @@ function sel_related() {
 
     if ($item_count == 0 && $titlecols == 0) $titlecols = 1;
 
+    // First item is on the "left-border"
+    $leftborder = true;
+
     // Handle starting of a new label cell.
     if ($titlecols > 0) {
       end_cell();
-      echo "<td valign='top' colspan='$titlecols' width='1%' nowrap";
+      echo "<td valign='top' colspan='" . attr($titlecols) . "' nowrap";
       echo " class='";
       echo ($frow['uor'] == 2) ? "required" : "bold";
       if ($graphable) echo " graph";
       echo "'";
       if ($cell_count == 2) echo " style='padding-left:10pt'";
-      if ($graphable) echo " id='$field_id'";
+      // This ID is used by skip conditions and also show_graph().
+      echo " id='label_id_" . attr($field_id) . "'";
       echo ">";
 
       foreach ($historical_ids as $key => $dummy) {
-        $historical_ids[$key] .= "<td valign='top' colspan='$titlecols' class='text' nowrap>";
+        $historical_ids[$key] .= "<td valign='top' colspan='" . attr($titlecols) . "' class='text' nowrap>";
       }
 
       $cell_count += $titlecols;
@@ -381,7 +622,7 @@ function sel_related() {
     ++$item_count;
 
     echo "<b>";
-    if ($frow['title']) echo htmlspecialchars(xl_layout_label($frow['title']) . ":"); else echo "&nbsp;";
+    if ($frow['title']) echo text(xl_layout_label($frow['title']) . ":"); else echo "&nbsp;";
     echo "</b>";
 
     // Note the labels are not repeated in the history columns.
@@ -389,12 +630,14 @@ function sel_related() {
     // Handle starting of a new data cell.
     if ($datacols > 0) {
       end_cell();
-      echo "<td valign='top' colspan='$datacols' class='text'";
+      echo "<td valign='top' colspan='" . attr($datacols) . "' class='text'";
+      // This ID is used by skip conditions.
+      echo " id='value_id_" . attr($field_id) . "'";
       if ($cell_count > 0) echo " style='padding-left:5pt'";
       echo ">";
 
       foreach ($historical_ids as $key => $dummy) {
-        $historical_ids[$key] .= "<td valign='top' align='right' colspan='$datacols' class='text'>";
+        $historical_ids[$key] .= "<td valign='top' align='right' colspan='" . attr($datacols) . "' class='text'>";
       }
 
       $cell_count += $datacols;
@@ -412,9 +655,7 @@ function sel_related() {
 
     // Append to historical data of other dates for this item.
     foreach ($historical_ids as $key => $dummy) {
-      $hvrow = sqlQuery("SELECT field_value FROM lbf_data WHERE " .
-        "form_id = '$key' AND field_id = '$field_id'");
-      $value = empty($hvrow) ? '' : $hvrow['field_value'];
+      $value = lbf_current_value($frow, $key, 0);
       $historical_ids[$key] .= generate_display_field($frow, $value);
     }
 
@@ -425,16 +666,22 @@ function sel_related() {
 
 <p style='text-align:center'>
 <?php if (empty($is_lbf)) { ?>
-<input type='submit' name='bn_save' value='<?php echo htmlspecialchars(xl('Save')) ?>' />
+<input type='submit' name='bn_save' value='<?php echo xla('Save') ?>' />
+<?php
+if (function_exists($formname . '_additional_buttons')) {
+  // Allow the plug-in to insert more action buttons here.
+  call_user_func($formname . '_additional_buttons');
+}
+?>
 &nbsp;
-<input type='button' value='<?php echo htmlspecialchars(xl('Cancel')) ?>' onclick="top.restoreSession();location='<?php echo $GLOBALS['form_exit_url']; ?>'" />
+<input type='button' value='<?php echo xla('Cancel') ?>' onclick="top.restoreSession();location='<?php echo $GLOBALS['form_exit_url']; ?>'" />
 &nbsp;
 <?php if ($form_is_graphable) { ?>
-<input type='button' value='<?php echo htmlspecialchars(xl('Show Graph')) ?>' onclick="top.restoreSession();location='../../patient_file/encounter/trend_form.php?formname=<?php echo $formname; ?>'" />
+<input type='button' value='<?php echo xla('Show Graph') ?>' onclick="top.restoreSession();location='../../patient_file/encounter/trend_form.php?formname=<?php echo attr($formname); ?>'" />
 &nbsp;
 <?php } ?>
 <?php } else { ?>
-<input type='button' value='<?php echo htmlspecialchars(xl('Back')) ?>' onclick='window.back();' />
+<input type='button' value='<?php echo xla('Back') ?>' onclick='window.history.back();' />
 <?php } ?>
 </p>
 
@@ -444,12 +691,35 @@ function sel_related() {
 <?php include $GLOBALS['fileroot'] . "/library/options_listadd.inc"; ?>
 
 <script language="JavaScript">
+
+// Array of skip conditions for the checkSkipConditions() function.
+var skipArray = [
+<?php echo $condition_str; ?>
+];
+
 <?php echo $date_init; ?>
 <?php
 if (function_exists($formname . '_javascript_onload')) {
   call_user_func($formname . '_javascript_onload');
 }
+
 // TBD: If $alertmsg, display it with a JavaScript alert().
+
+// New form and this patient has a portal login and we have not loaded portal data.
+// Check if there is portal data pending for this patient and form type.
+if (!$formid && $GLOBALS['gbl_portal_cms_enable'] && $cmsportal_login && !$portalid) {
+  $portalres = cms_portal_call(array('action' => 'checkptform', 'form' => $formname, 'patient' => $cmsportal_login));
+  if ($portalres['errmsg']) {
+    die(text($portalres['errmsg'])); // TBD: Change to alertmsg
+  }
+  $portalid = $portalres['postid'];
+  if ($portalid) {
+    echo "if (confirm('" . xls('The portal has data for this patient and form. Load it now?') . "')) {\n";
+    echo " top.restoreSession();\n";
+    echo " document.location.href = 'load_form.php?formname=$formname&portalid=$portalid';\n";
+    echo "}\n";
+  }
+}
 ?>
 </script>
 

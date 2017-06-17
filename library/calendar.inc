@@ -1,4 +1,7 @@
 <?php
+//Require once the holidays controller for the is holiday function
+
+require_once($GLOBALS['incdir']."/main/holidays/Holidays_Controller.php");
 //function returns the next most recent appointment given a pid
 function getNextAppointment ($pid) {
 $query = "select * from calendar where pid=$pid and time>now() order by time limit 1";
@@ -42,7 +45,7 @@ function getProviderUsernames() {
 
 
 function getIDfromUser($name) {
-	$query = "select id from users where username=\"" . mysql_real_escape_string($name) . "\" limit 1";
+	$query = "select id from users where username=\"" . add_escape_custom($name) . "\" limit 1";
 	$rez = sqlStatement($query);
 	$row = sqlFetchArray($rez);
 	if (!is_numeric($row['id']))
@@ -190,6 +193,29 @@ function pc_getDate($format='%Y%m%d')  {
 	$m = substr($Date,4,2);
 	$d = substr($Date,6,2);
     return strftime($format,mktime(0,0,0,$m,$d,$y));
+}
+
+ /**
+ * Check if day is weekend day
+ * @param (int) $day
+ * @return boolean
+ */
+function is_weekend_day($day){
+
+	if (in_array($day, $GLOBALS['weekend_days'])) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+/**
+ * This function checks if a certain date (YYYY/MM/DD) is a marked as a holiday/closed  event in the events table
+ * @param (int) $day
+ * @return boolean
+ */
+function is_holiday($date){
+	Holidays_Controller::is_holiday($date);
 }
 
 ?>

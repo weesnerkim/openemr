@@ -1,28 +1,24 @@
 <?php
-//  ------------------------------------------------------------------------ //
-//                     Garden State Health Systems                           //
-//                    Copyright (c) 2010 gshsys.com                          //
-//                      <http://www.gshsys.com/>                             //
-//  ------------------------------------------------------------------------ //
-//  This program is free software; you can redistribute it and/or modify     //
-//  it under the terms of the GNU General Public License as published by     //
-//  the Free Software Foundation; either version 2 of the License, or        //
-//  (at your option) any later version.                                      //
-//                                                                           //
-//  You may not change or alter any portion of this comment or credits       //
-//  of supporting developers from this source code or any supporting         //
-//  source code which is considered copyrighted (c) material of the          //
-//  original comment or credit authors.                                      //
-//                                                                           //
-//  This program is distributed in the hope that it will be useful,          //
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of           //
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            //
-//  GNU General Public License for more details.                             //
-//                                                                           //
-//  You should have received a copy of the GNU General Public License        //
-//  along with this program; if not, write to the Free Software              //
-//  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA //
-//  ------------------------------------------------------------------------ //
+/**
+ * CCR Script.
+ *
+ * Copyright (C) 2010 Garden State Health Systems <http://www.gshsys.com/>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Garden State Health Systems <http://www.gshsys.com/>
+ * @link    http://www.open-emr.org
+ */
 
 
 $result = getActorData();
@@ -55,7 +51,9 @@ while ($row = sqlFetchArray($result[0])) {
 	$e_DateOfBirth = $ccr->createElement('DateOfBirth');
 	$e_Person->appendChild($e_DateOfBirth);
 	
-	$e_ExactDateTime = $ccr->createElement('ExactDateTime',$row['DOB']);
+	$dob = date_create($row['DOB']);
+	
+	$e_ExactDateTime = $ccr->createElement('ExactDateTime',$dob->format('Y-m-d\TH:i:s\Z'));
 	$e_DateOfBirth->appendChild($e_ExactDateTime);
 	
 	$e_Gender = $ccr->createElement('Gender');
@@ -135,7 +133,7 @@ while ($row = sqlFetchArray($result[0])) {
 
 $row1 = sqlFetchArray($result[1]);
 	//////// Actor Information Systems
-	
+
 	$e_Actor = $ccr->createElement('Actor');
 	$e_Actors->appendChild($e_Actor);
 

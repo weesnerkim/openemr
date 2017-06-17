@@ -2,16 +2,16 @@
  include_once("../globals.php");
  include_once("$srcdir/acl.inc");
 
- $ie_auth = ((acl_check('encounters', 'notes') == 'write' ||
-              acl_check('encounters', 'notes_a') == 'write') &&
-             acl_check('patients', 'med') == 'write');
+ $ie_auth = ((acl_check('encounters','notes','','write') ||
+              acl_check('encounters','notes_a','','write')) &&
+             acl_check('patients','med','','write'));
 ?>
 <html>
 <head>
 <?php html_header_show();?>
 <title><?php xl('Navigation','e'); ?></title>
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
-<script type="text/javascript" src="../../library/dialog.js"></script>
+<script type="text/javascript" src="../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 <script language="JavaScript">
 // This is invoked to pop up some window when a popup item is selected.
 function selpopup(selobj) {
@@ -54,7 +54,7 @@ function selpopup(selobj) {
    <a href="javascript:top.restoreSession();parent.Title.location.href='<?php echo $rootdir;?>/patient_file/transaction/transaction_title.php';parent.Main.location.href='<?php echo $rootdir;?>/patient_file/transaction/patient_transaction.php'" target="Main" class="menu"><?php xl('Transaction','e'); ?></a>
   </td>
   <td align="center" valign="middle">
-   <a href="<?php echo $GLOBALS['web_root'];?>/controller.php?document&list&patient_id=<?=$pid?>"
+   <a href="<?php echo $GLOBALS['web_root'];?>/controller.php?document&list&patient_id=<?php echo $pid?>"
     target="Main" class="menu" onclick="top.restoreSession()"><?php xl('Documents','e'); ?></a>
   </td>
   <td align="center" valign="middle">
@@ -71,9 +71,6 @@ function selpopup(selobj) {
 <?php } ?>
      <option value='../../custom/export_xml.php'><?php xl('Export','e'); ?></option>
      <option value='../../custom/import_xml.php'><?php xl('Import','e'); ?></option>
-<?php if ($GLOBALS['athletic_team']) { ?>
-     <option value='../reports/players_report.php'><?php xl('Roster','e'); ?></option>
-<?php } ?>
      <option value='../reports/appointments_report.php?patient=<?php echo $pid ?>'><?php xl('Appts','e'); ?></option>
 <?php if (file_exists("$webserver_root/custom/refer.php")) { ?>
      <option value='../../custom/refer.php'><?php xl('Refer','e'); ?></option>

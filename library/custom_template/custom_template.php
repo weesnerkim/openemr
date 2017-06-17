@@ -25,15 +25,18 @@
 //
 // +------------------------------------------------------------------------------+
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../../interface/globals.php");
+require_once("$srcdir/lists.inc");
+// mdsupport : li code
+function listitemCode ($strDisp, $strInsert) {
+	if ($strInsert) {
+		echo '<li><span><a href="#" onclick="top.restoreSession();CKEDITOR.instances.textarea1.insertText('.
+			 "'" . htmlspecialchars($strInsert,ENT_QUOTES) . "'" .');">'. htmlspecialchars($strDisp,ENT_QUOTES) . '</a></span></li>';
+	}
+}
+
 $contextName = $_REQUEST['contextName'];
 $type = $_REQUEST['type'];
 $rowContext = sqlQuery("SELECT * FROM customlists WHERE cl_list_type=2 AND cl_list_item_long=?",array($contextName));
@@ -46,8 +49,8 @@ $rowContext = sqlQuery("SELECT * FROM customlists WHERE cl_list_type=2 AND cl_li
     <script src="ckeditor/_samples/sample.js" type="text/javascript"></script>
     <link href="ckeditor/_samples/sample.css" rel="stylesheet" type="text/css" />
     <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
-    <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js"></script>
-    <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery.1.3.2.js"></script>
+    <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
+    <script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-3-2/index.js"></script>
     <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery-ui-1.7.1.custom.min.js"></script>
     <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/common.js"></script>
     <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/fancybox/jquery.fancybox-1.2.6.js"></script>
@@ -149,7 +152,7 @@ $(document).ready(function(){
                                 while($row=sqlFetchArray($res)){
                                 ?>
                                     <a href="#" onclick="top.restoreSession();CKEDITOR.instances.textarea1.insertText('<?php echo $row['cl_list_item_short'];?>');" class="css_button" title="<?php echo htmlspecialchars(xl($row['cl_list_item_long']),ENT_QUOTES);?>"><span><?php echo ucfirst(htmlspecialchars(xl($row['cl_list_item_long']),ENT_QUOTES));?></span></a>
-                                <?php                   
+                                <?php 
                                 }
                                 ?>
                             </td>
@@ -167,44 +170,41 @@ $(document).ready(function(){
                                     </li>
                                     <?php
                                     if($pid!=''){
-                                        $row = sqlQuery("SELECT * FROM patient_data WHERE pid=?",array($pid));
+                                        $row = sqlQuery("SELECT p.*, IF(ISNULL(p.providerID), NULL, CONCAT(u.lname,',',u.fname)) pcp ".
+														"FROM patient_data p LEFT OUTER JOIN users u ".
+														"ON u.id=p.providerID WHERE pid=?"
+														,array($pid));
                                     ?>
                                     <li><a class="collapsed"><?php echo htmlspecialchars(xl('Patient Details'),ENT_QUOTES);?></a>
                                         <ul>
-                                            <li><span><a href="#" onclick="top.restoreSession();CKEDITOR.instances.textarea1.insertText('<?php echo $row['fname'];?>');"><?php echo htmlspecialchars(xl('First name',ENT_QUOTES));?></a></span></li>
-                                            <li><span><a href="#" onclick="top.restoreSession();CKEDITOR.instances.textarea1.insertText('<?php echo $row['lname'];?>');"><?php echo htmlspecialchars(xl('Last name',ENT_QUOTES));?></a></span></li>
-                                            <?php
-                                            if($row['phone_home']){
-                                            ?>
-                                            <li><span><a href="#" onclick="top.restoreSession();CKEDITOR.instances.textarea1.insertText('<?php echo $row['phone_home'];?>');"><?php echo htmlspecialchars(xl('Phone',ENT_QUOTES));?></a></span></li>
-                                            <?php
-                                            }
-                                            ?>
-                                            <?php
-                                            if($row['ss']){
-                                            ?>
-                                            <li><span><a href="#" onclick="top.restoreSession();CKEDITOR.instances.textarea1.insertText('<?php echo $row['ss'];?>');"><?php echo htmlspecialchars(xl('SSN',ENT_QUOTES));?></a></span></li>
-                                            <?php
-                                            }
-                                            ?>
-                                            <?php
-                                            if($row['DOB']){
-                                            ?>
-                                            <li><span><a href="#" onclick="top.restoreSession();CKEDITOR.instances.textarea1.insertText('<?php echo $row['DOB'];?>');"><?php echo htmlspecialchars(xl('Date Of Birth',ENT_QUOTES));?></a></span></li>
-                                            <?php
-                                            }
-                                            ?>
-                                            <?php
-                                            if($row['providerID']){
-                                                $val=sqlQuery("SELECT CONCAT(lname,',',fname) AS name FROM users WHERE id='".$row['providerID']."'");
-                                            ?>
-                                            <li><span><a href="#" onclick="top.restoreSession();CKEDITOR.instances.textarea1.insertText('<?php echo $val['name'];?>');"><?php echo htmlspecialchars(xl('PCP',ENT_QUOTES));?></a></span></li>
-                                            <?php
-                                            }
-                                            ?>
+                                        <?php
+                                        	listitemCode(xl('First name'), $row['fname']);
+                                        	listitemCode(xl('Last name'), $row['lname']);
+                                        	listitemCode(xl('Phone'), $row['phone_home']);
+                                        	listitemCode(xl('SSN'), $row['ss']);
+                                        	listitemCode(xl('Date Of Birth'), $row['DOB']);
+                                        	listitemCode(xl('PCP'), $row['pcp']);
+                                        ?>
                                         </ul>
                                     </li>
-                                    <?php
+	                                    <?php
+										foreach ($ISSUE_TYPES as $issType => $issTypeDesc) {
+	    									$res = sqlStatement('SELECT title, IF(diagnosis="","",CONCAT(" [",diagnosis,"]")) codes FROM lists WHERE pid=? AND type=? AND enddate IS NULL ORDER BY title'
+															,array($pid, $issType));
+	    									if (sqlNumRows($res)) {
+										?>
+                                    <li><a class="collapsed"><?php echo htmlspecialchars(xl($issTypeDesc[0]),ENT_QUOTES);?></a>
+                                        <ul>
+                                    		<?php
+	                                    		while ($row = sqlFetchArray($res)) {
+													listitemCode((strlen($row['title'])>20) ? (substr($row['title'], 0, 18).'..') : $row['title'], ($row['title'].$row['codes']));
+												}
+											?>
+										</ul>
+									</li>
+									<?php
+											}
+	    								}
                                     }
                                     ?>
                                 </ul>

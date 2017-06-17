@@ -1,15 +1,13 @@
 <?php
-include_once ('../../globals.php'); 
-include_once ('../../../library/sql.inc'); 
+include_once ('../../globals.php');
 include_once ('../../../library/classes/Prescription.class.php');
-include_once("../../../library/formdata.inc.php");
 //practice data
-$physician_name = ''; 
+$physician_name = '';
 $practice_fname = '';
 $practice_lname = '';
 $practice_title = '';
-$practice_address = ''; 
-$practice_city = ''; 
+$practice_address = '';
+$practice_city = '';
 $practice_state = '';
 $practice_zip  = '';
 $practice_phone = '';
@@ -19,28 +17,28 @@ $practice_dea = '';
 //patient data
 $patient_name = '';
 $patient_address = '';
-$patient_city = ''; 
+$patient_city = '';
 $patient_state = '';
 $patient_zip = '';
 $patient_phone = '';
 $patient_dob = '';
 $sigline = array();
-$sigline['plain'] =  
-    "<div class='signature'>" 
+$sigline['plain'] =
+    "<div class='signature'>"
   . " ______________________________________________<br/>"
   . "</div>\n";
-$sigline['embossed'] =  
-    "<div class='signature'>" 
+$sigline['embossed'] =
+    "<div class='signature'>"
   . " _____________________________________________________<br/>"
 #  . "Signature - Valid for three days and in Broward County only."
   . "Signature"
   . "</div>\n";
-$sigline['signed'] =  
+$sigline['signed'] =
     "<div class='sig'>"
   . "<img src='./sig.jpg'>"
   . "</div>\n";
 $query = sqlStatement("select fname,lname,street,city,state,postal_code,phone_home,DATE_FORMAT(DOB,'%m/%d/%y') as DOB from patient_data where pid =" . $_SESSION['pid']);
-if ($result = mysql_fetch_array($query, MYSQL_ASSOC)) {
+if ($result = sqlFetchArray($query)) {
   $patient_name = $result['fname'] . ' ' . $result['lname'];
   $patient_address = $result['street'];
   $patient_city = $result['city'];
@@ -52,68 +50,69 @@ if ($result = mysql_fetch_array($query, MYSQL_ASSOC)) {
 //update user information if selected from form
 if ($_POST['update']) { // OPTION update practice inf
   $query = "update users set " .
-    "fname = '" . formData('practice_fname') . "', " .  
-    "lname = '" . formData('practice_lname') . "', " .  
-    "title = '" . formData('practice_title') . "', " .  
-    "street = '" . formData('practice_address') . "', " .  
-    "city = '" . formData('practice_city') . "', " .  
-    "state = '" . formData('practice_state') . "', " .  
-    "zip = '" . formData('practice_zip') . "', " .  
-    "phone = '" . formData('practice_phone') . "', " .  
-    "fax = '" . formData('practice_fax') . "', " .  
-    "federaldrugid = '" . formData('practice_dea') . "' " .  
+    "fname = '" . formData('practice_fname') . "', " .
+    "lname = '" . formData('practice_lname') . "', " .
+    "title = '" . formData('practice_title') . "', " .
+    "street = '" . formData('practice_address') . "', " .
+    "city = '" . formData('practice_city') . "', " .
+    "state = '" . formData('practice_state') . "', " .
+    "zip = '" . formData('practice_zip') . "', " .
+    "phone = '" . formData('practice_phone') . "', " .
+    "fax = '" . formData('practice_fax') . "', " .
+    "federaldrugid = '" . formData('practice_dea') . "' " .
     "where id =" . $_SESSION['authUserID'];
   sqlInsert($query);
 }
 //get user information
 $query = sqlStatement("select * from users where id =" . $_SESSION['authUserID']);
-if ($result = mysql_fetch_array($query, MYSQL_ASSOC)) {
-  $physician_name = $result['fname'] . ' ' . $result['lname'] . ', ' . $result['title']; 
+if ($result = sqlFetchArray($query)) {
+  $physician_name = $result['fname'] . ' ' . $result['lname'] . ', ' . $result['title'];
   $practice_fname = $result['fname'];
   $practice_lname = $result['lname'];
   $practice_title = $result['title'];
-  $practice_address = $result['street']; 
-  $practice_city = $result['city']; 
+  $practice_address = $result['street'];
+  $practice_city = $result['city'];
   $practice_state = $result['state'];
   $practice_zip  = $result['zip'];
   $practice_phone = $result['phone'];
   $practice_fax = $result['fax'];
   $practice_dea = $result['federaldrugid'];
 }
-if ($_POST['print_pdf'] || $_POST['print_html']) { 
+if ($_POST['print_pdf'] || $_POST['print_html']) {
   $camos_content = array();
   foreach ($_POST as $key => $val) {
     if (substr($key,0,3) == 'ch_') {
-      $query = sqlStatement("select content from form_CAMOS where id =" . 
+      $query = sqlStatement("select content from ".mitigateSqlTableUpperCase("form_CAMOS")." where id =" .
         substr($key,3));
-      if ($result = mysql_fetch_array($query, MYSQL_ASSOC)) {
+      if ($result = sqlFetchArray($query)) {
+
   	if ($_POST['print_html']) { //do this change to formatting only for html output
-        	$content = preg_replace('|\n|','<br/>', $result['content']);
+        	$content = preg_replace('|\n|','<br/>', text($result['content']));
 	        $content = preg_replace('|<br/><br/>|','<br/>', $content);
 	} else {
 		$content = $result['content'];
 	}
-        array_push($camos_content,$content); 
+        array_push($camos_content,$content);
       }
     }
     if (substr($key,0,5) == 'chrx_') {
       $rx = new Prescription(substr($key,5));
       //$content = $rx->drug.' '.$rx->form.' '.$rx->dosage;
-      $content = '' 
-      . $rx->drug . ' '
-      . $rx->size . ''
-      . $rx->unit_array[$rx->unit] . '<br/>' 
-      . $rx->quantity. ' '
-      . $rx->form_array[$rx->form]. '<br/>'
-      . $rx->dosage . ' '
-      . $rx->form_array[$rx->form]. ' '
-      . $rx->route_array[$rx->route] . ' '
-      . $rx->interval_array[$rx->interval] . '<br/>'
-      . $rx->note . '<br/>'
+      $content = ''
+      . text($rx->drug) . ' '
+      . text($rx->size) . ''
+      . text($rx->unit_array[$rx->unit]) . '<br/>'
+      . text($rx->quantity). ' '
+      . text($rx->form_array[$rx->form]). '<br/>'
+      . text($rx->dosage) . ' '
+      . text($rx->form_array[$rx->form]). ' '
+      . text($rx->route_array[$rx->route]) . ' '
+      . text($rx->interval_array[$rx->interval]) . '<br/>'
+      . text($rx->note) . '<br/>'
       . 'refills:' . $rx->refills . '';
 //      . $rx->substitute_array[$rx->substitute]. ''
 //      . $rx->per_refill . '';
-      array_push($camos_content,$content); 
+      array_push($camos_content,$content);
     }
   }
   if (!$_GET['letterhead']) { //OPTION print a prescription with css formatting
@@ -141,7 +140,7 @@ function topHeaderRx() {
     print $practice_state . " ";
     print $practice_zip . "<br/>\n";
     print xl('Voice') . ': ' . $practice_phone . ' / ' . xl('Fax') . ': ' . $practice_fax . "<br/>\n";
-    print xl('DEA') . ': ' . $practice_dea;   
+    print xl('DEA') . ': ' . $practice_dea;
 }
 function bottomHeaderRx() {
     global $patient_name,$patient_address,$patient_city,$patient_state,$patient_zip,$patient_phone,$patient_dob;
@@ -173,7 +172,7 @@ function bottomHeaderRx() {
   </div>
   <div class='content'>
     <?php
-        print $camos_content[0]; 
+        print $camos_content[0];
     ?>
   </div>
   <?php print $sigline[$_GET[sigline]] ?>
@@ -199,13 +198,13 @@ if ($camos_content[1]) { //decide if we are printing this rx
   <div class='bottomheader'>
   <?php
 
-    bottomHeaderRx();  
+    bottomHeaderRx();
   ?>
   </div>
   <div class='content'>
     <?php
 
-        print $camos_content[1]; 
+        print $camos_content[1];
     ?>
   </div>
   <?php print $sigline[$_GET[sigline]] ?>
@@ -225,7 +224,7 @@ if ($camos_content[2]) { //decide if we are printing this rx
   <div class='topheader'>
   <?php
 
-    topHeaderRx();  
+    topHeaderRx();
   ?>
   </div>
     <hr/>
@@ -238,7 +237,7 @@ if ($camos_content[2]) { //decide if we are printing this rx
   <div class='content'>
     <?php
 
-        print $camos_content[2]; 
+        print $camos_content[2];
     ?>
   </div>
   <?php print $sigline[$_GET[sigline]] ?>
@@ -271,7 +270,7 @@ if ($camos_content[3]) { //decide if we are printing this rx
   <div class='content'>
     <?php
 
-        print $camos_content[3]; 
+        print $camos_content[3];
     ?>
   </div>
   <?php print $sigline[$_GET[sigline]] ?>
@@ -300,7 +299,7 @@ else {
 	 font-size: 12pt;
 	 background: white;
 	 color: black;
-	}	
+	}
 	.paddingdiv {
 	 width: 524pt;
 	 padding: 0pt;
@@ -308,13 +307,13 @@ else {
 	}
 	.navigate {
 	 margin-top: 2.5em;
-	}	
+	}
 	@media print {
 	 .navigate {
 	  display: none;
-	 }	
-	}	
-	</style>	
+	 }
+	}
+	</style>
 	<title><?php xl('Letter','e'); ?></title>
 	</head>
         <body>
@@ -352,7 +351,8 @@ else {
 	print "</div>";
 ?>
         <script language='JavaScript'>
-        window.print();
+        var win = top.printLogPrint ? top : opener.top;
+        win.printLogPrint(window);
         </script>
 	</div>
         </body>
@@ -361,9 +361,8 @@ else {
         exit;
     }
     else { //print letterhead to pdf
-	include_once('../../../library/classes/class.ezpdf.php');
-  	$pdf =& new Cezpdf();
-	$pdf->selectFont('../../../library/fonts/Times-Bold');
+  $pdf = new Cezpdf();
+	$pdf->selectFont('Times-Bold');
 	$pdf->ezSetCmMargins(3,1,1,1);
 	$pdf->ezText($physician_name,12);
 	$pdf->ezText($practice_address,12);
@@ -373,15 +372,15 @@ else {
 	$pdf->ezText('',12);
 	$pdf->ezText(date("l, F jS, Y"),12);
 	$pdf->ezText('',12);
-	$pdf->selectFont('../../../library/fonts/Helvetica');
+	$pdf->selectFont('Helvetica');
 	$pdf->ezText($content,10);
-	$pdf->selectFont('../../../library/fonts/Times-Bold');
+	$pdf->selectFont('Times-Bold');
 	$pdf->ezText('',12);
 	$pdf->ezText('',12);
 	if ($_GET['signer'] == 'patient') {
 		$pdf->ezText("__________________________________________________________________________________",12);
 		$pdf->ezText(xl("Print name, sign and date."),12);
-	} 
+	}
 	elseif ($_GET['signer'] == 'doctor') {
 		$pdf->ezText(xl('Sincerely,'),12);
 		$pdf->ezText('',12);
@@ -441,12 +440,12 @@ function cycle_engine(cb,seed) {
     if (cbc[2].innerHTML == 'prescriptions') {
       if (cbc[1].checked == true) {
         cbc[1].checked = false;
-        count_turnoff++;   
+        count_turnoff++;
       } else {
         if ((count_turnoff > 0 || seed == 1) && count_turnon < 4) {
           cbc[1].checked = true;
-          count_turnon++;   
-        } 
+          count_turnon++;
+        }
       }
     }
   }
@@ -465,30 +464,30 @@ function cycle_engine(cb,seed) {
 <?php if ($_GET['letterhead']) { ?>
 <input type=submit name='print_pdf' value='<?php xl('Print (PDF)','e'); ?>'>
 <?php } ?>
-	
+
 <input type=submit name='print_html' value='<?php xl('Print (HTML)','e'); ?>'>
 <?php
 
 //check if an encounter is set
-if ($_SESSION['encounter'] == NULL) { 
-  $query = sqlStatement("select x.id as id, x.category, x.subcategory, x.item from " . 
-  "form_CAMOS as x join forms as y on (x.id = y.form_id) " . 
-  "where y.pid = " . $_SESSION['pid'] . 
-  " and y.form_name like 'CAMOS%'" . 
-  " and x.activity = 1"); 
-} 
-else { 
-  $query = sqlStatement("select x.id as id, x.category, x.subcategory, x.item from " . 
-  "form_CAMOS  as x join forms as y on (x.id = y.form_id) " . 
-  "where y.encounter = " .  $_SESSION['encounter'] . 
-  " and y.pid = " . $_SESSION['pid'] .  
+if ($_SESSION['encounter'] == NULL) {
+  $query = sqlStatement("select x.id as id, x.category, x.subcategory, x.item from " .
+  mitigateSqlTableUpperCase("form_CAMOS")." as x join forms as y on (x.id = y.form_id) " .
+  "where y.pid = " . $_SESSION['pid'] .
+  " and y.form_name like 'CAMOS%'" .
+  " and x.activity = 1");
+}
+else {
+  $query = sqlStatement("select x.id as id, x.category, x.subcategory, x.item from " .
+  mitigateSqlTableUpperCase("form_CAMOS")."  as x join forms as y on (x.id = y.form_id) " .
+  "where y.encounter = " .  $_SESSION['encounter'] .
+  " and y.pid = " . $_SESSION['pid'] .
   " and y.form_name like 'CAMOS%'" .
   " and x.activity = 1");
 }
 $results = array();
 echo "<div id='checkboxes'>\n";
 $count = 0;
-while ($result = mysql_fetch_array($query, MYSQL_ASSOC)) {
+while ($result = sqlFetchArray($query)) {
   $checked = '';
   if ($result['category'] == 'prescriptions' && $count < 4) {
     $count++;
@@ -511,54 +510,54 @@ foreach($rxarray as $val) {
     $val->drug . ':' . $val->start_date . "<br/>\n";
 }
 ?>
-	
+
 <?php if ($_GET['letterhead']) { ?>
 <input type=submit name='print_pdf' value='<?php xl('Print (PDF)','e'); ?>'>
 <?php } ?>
-	
+
 <input type=submit name='print_html' value='<?php xl('Print (HTML)','e'); ?>'>
 </form>
 <h1><?php xl('Update User Information','e'); ?></h1>
 <form method=POST name='pick_items'>
 <table>
 <tr>
-  <td> <?php xl('First Name','e'); ?>: </td> 
+  <td> <?php xl('First Name','e'); ?>: </td>
   <td> <input type=text name=practice_fname value ='<?php echo htmlspecialchars($practice_fname,ENT_QUOTES); ?>'> </td>
 </tr>
 <tr>
-  <td> <?php xl('Last Name','e'); ?>: </td> 
+  <td> <?php xl('Last Name','e'); ?>: </td>
   <td> <input type=text name=practice_lname value ='<?php echo htmlspecialchars($practice_lname,ENT_QUOTES); ?>'> </td>
 </tr>
 <tr>
-  <td> <?php xl('Title','e'); ?>: </td> 
+  <td> <?php xl('Title','e'); ?>: </td>
   <td> <input type=text name=practice_title value ='<?php echo htmlspecialchars($practice_title,ENT_QUOTES); ?>'> </td>
 </tr>
 <tr>
-  <td> <?php xl('Street Address','e'); ?>: </td> 
+  <td> <?php xl('Street Address','e'); ?>: </td>
   <td> <input type=text name=practice_address value ='<?php echo htmlspecialchars($practice_address,ENT_QUOTES); ?>'> </td>
 </tr>
 <tr>
-  <td> <?php xl('City','e'); ?>: </td> 
+  <td> <?php xl('City','e'); ?>: </td>
   <td> <input type=text name=practice_city value ='<?php echo htmlspecialchars($practice_city,ENT_QUOTES); ?>'> </td>
 </tr>
 <tr>
-  <td> <?php xl('State','e'); ?>: </td> 
+  <td> <?php xl('State','e'); ?>: </td>
   <td> <input type=text name=practice_state value ='<?php echo htmlspecialchars($practice_state,ENT_QUOTES); ?>'> </td>
 </tr>
 <tr>
-  <td> <?php xl('Zip','e'); ?>: </td> 
+  <td> <?php xl('Zip','e'); ?>: </td>
   <td> <input type=text name=practice_zip value ='<?php echo htmlspecialchars($practice_zip,ENT_QUOTES); ?>'> </td>
 </tr>
 <tr>
-  <td> <?php xl('Phone','e'); ?>: </td> 
+  <td> <?php xl('Phone','e'); ?>: </td>
   <td> <input type=text name=practice_phone value ='<?php echo htmlspecialchars($practice_phone,ENT_QUOTES); ?>'> </td>
 </tr>
 <tr>
-  <td> <?php xl('Fax','e'); ?>: </td> 
+  <td> <?php xl('Fax','e'); ?>: </td>
   <td> <input type=text name=practice_fax value ='<?php echo htmlspecialchars($practice_fax,ENT_QUOTES); ?>'> </td>
 </tr>
 <tr>
-  <td> <?php xl('DEA','e'); ?>: </td> 
+  <td> <?php xl('DEA','e'); ?>: </td>
   <td> <input type=text name=practice_dea value ='<?php echo htmlspecialchars($practice_dea,ENT_QUOTES); ?>'> </td>
 </tr>
 </table>

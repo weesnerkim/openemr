@@ -1,12 +1,6 @@
 <?php 
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 include_once("../../globals.php");
 include_once("$srcdir/calendar.inc");
@@ -178,8 +172,8 @@ form {
 }
 </style>
 
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js"></script>
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery-1.2.2.min.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
 
 <script language='JavaScript'>
 
@@ -196,7 +190,7 @@ form {
    //'&date=' + eventdate + '&userid=' + providerid +
    '&date=' + eventdate +
    '&patientid=' + patientid,
-   '_blank', 550, 310);
+   '_blank', 775, 500);
  }
 
 </script>
@@ -280,17 +274,16 @@ form {
     $itermname = $iter['mname'];
     $iterdob   = $iter['DOB'];
 
-    // the special genericname2 of 'Billing' means something, but I'm not sure
-    // what, regardless it gets special coloring and an extra line of output
-    // in the 'name' column -- JRM
+    // If billing_note exists, then it gets special coloring and an extra line of output
+    // in the 'name' column.
     $trClass = "oneresult";
-    if ($iter['genericname2'] == 'Billing') { $trClass .= " billing"; }
+    if (!empty($iter['billing_note'])) { $trClass .= " billing"; }
 
     $trTitle = xl("Make new appointment for") . " " . $iterfname . " " . $iterlname;
         
     echo " <tr class='".$trClass."' id='".htmlspecialchars( $iterpid."~".$iterproviderid, ENT_QUOTES)."' title='".htmlspecialchars( $trTitle, ENT_QUOTES)."'>";
     echo "  <td class='srName'>".htmlspecialchars( $iterlname.", ".$iterfname." ".$itermname, ENT_NOQUOTES);
-    if ($iter['genericname2'] == 'Billing') { echo "<br>".htmlspecialchars( $iter['genericval2'], ENT_NOQUOTES); }
+    if (!empty($iter['billing_note'])) { echo "<br>".htmlspecialchars( $iter['billing_note'], ENT_NOQUOTES); }
     echo "</td>\n";
     echo "  <td class='srPhone'>" . htmlspecialchars( $iter['phone_home'], ENT_NOQUOTES) . "</td>\n"; //(CHEMED) Search by phone number
     echo "  <td class='srSS'>" . htmlspecialchars( $iter['ss'], ENT_NOQUOTES) . "</td>\n";

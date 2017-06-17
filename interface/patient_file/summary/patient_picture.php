@@ -1,15 +1,8 @@
 <?php
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../../globals.php");
-require_once("$srcdir/sql.inc");
 function pic_array() {
     $picture_directory = "Patient Photograph"; //change this if you want
     $pics = array();

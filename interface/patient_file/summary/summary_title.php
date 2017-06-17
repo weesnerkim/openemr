@@ -2,19 +2,18 @@
 include_once("../../globals.php");
 include_once("$srcdir/patient.inc");
 include_once("$srcdir/calendar.inc");
-require_once("$srcdir/classes/Pharmacy.class.php");
 ?>
 <html>
 <head>
 <?php html_header_show();?>
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
-<script type="text/javascript" src="../../../library/dialog.js"></script>
+<script type="text/javascript" src="../../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 
 <script language='JavaScript'>
 
  function newEvt() {
   dlgopen('../../main/calendar/add_edit_event.php?patientid=<?php echo $pid ?>',
-   '_blank', 550, 270);
+   '_blank', 775, 500);
   return false;
  }
 
@@ -44,7 +43,7 @@ require_once("$srcdir/classes/Pharmacy.class.php");
   <td style="width:45%; vertical-align:middle; white-space: nowrap; text-align:left">
 
   <span class="title_bar_top"><?php echo $result{"fname"} . " " . $result{"lname"};?></span>
-   
+
    <span style="font-size:0.7em;">(<?php echo $info ?>)</span>
   </td>
   <td style="width:35%; vertical-align:middle; white-space: nowrap; text-align:center">

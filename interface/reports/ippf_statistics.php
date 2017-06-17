@@ -1,5 +1,5 @@
 <?php
-// Copyright (C) 2008-2010 Rod Roark <rod@sunsetsystems.com>
+// Copyright (C) 2008-2015 Rod Roark <rod@sunsetsystems.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -16,6 +16,8 @@ include_once("../../library/acl.inc");
 // Might want something different here.
 //
 if (! acl_check('acct', 'rep')) die("Unauthorized access.");
+
+$facilityService = new \services\FacilityService();
 
 $report_type = empty($_GET['t']) ? 'i' : $_GET['t'];
 
@@ -1133,11 +1135,10 @@ function uses_description($form_by) {
 <?php
  // Build a drop-down list of facilities.
  //
- $query = "SELECT id, name FROM facility ORDER BY name";
- $fres = sqlStatement($query);
+ $fres = $facilityService->getAll();
  echo "      <select name='form_facility'>\n";
  echo "       <option value=''>-- All Facilities --\n";
- while ($frow = sqlFetchArray($fres)) {
+ foreach($fres as $frow) {
   $facid = $frow['id'];
   echo "       <option value='$facid'";
   if ($facid == $_POST['form_facility']) echo " selected";
@@ -1216,7 +1217,7 @@ foreach (array(1 => 'Screen', 2 => 'Printer', 3 => 'Export File') as $key => $va
     if ($form_content == 5) { // sales of contraceptive products
       $query = "SELECT " .
         "ds.pid, ds.encounter, ds.sale_date, ds.quantity, " .
-        "d.cyp_factor, d.related_code, " . 
+        "d.cyp_factor, d.related_code, " .
         "pd.regdate, pd.sex, pd.DOB, pd.lname, pd.fname, pd.mname, " .
         "pd.contrastart, pd.referral_source$pd_fields, " .
         "fe.date AS encdate, fe.provider_id " .
@@ -1332,7 +1333,7 @@ foreach (array(1 => 'Screen', 2 => 'Printer', 3 => 'Export File') as $key => $va
     /*****************************************************************
     if ($form_by === '104' || $form_by === '105') {
       $query = "SELECT " .
-        "d.name, d.related_code, ds.pid, ds.quantity, " . 
+        "d.name, d.related_code, ds.pid, ds.quantity, " .
         "pd.regdate, pd.referral_source, " .
         "pd.sex, pd.DOB, pd.lname, pd.fname, pd.mname, " .
         "pd.contrastart$pd_fields " .
@@ -1589,7 +1590,8 @@ foreach (array(1 => 'Screen', 2 => 'Printer', 3 => 'Export File') as $key => $va
  Calendar.setup({inputField:"form_from_date", ifFormat:"%Y-%m-%d", button:"img_from_date"});
  Calendar.setup({inputField:"form_to_date", ifFormat:"%Y-%m-%d", button:"img_to_date"});
 <?php if ($form_output == 2) { ?>
- window.print();
+ var win = top.printLogPrint ? top : opener.top;
+ win.printLogPrint(window);
 <?php } ?>
 </script>
 

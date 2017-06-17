@@ -1,18 +1,27 @@
 <?php
- // Copyright (C) 2007 Rod Roark <rod@sunsetsystems.com>
- //
- // This program is free software; you can redistribute it and/or
- // modify it under the terms of the GNU General Public License
- // as published by the Free Software Foundation; either version 2
- // of the License, or (at your option) any later version.
+/** 
+ * Billing notes.
+ *
+ * Copyright (C) 2007 Rod Roark <rod@sunsetsystems.com>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Rod Roark <rod@sunsetsystems.com>
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @link    http://www.open-emr.org
+ */
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
  include_once("../../globals.php");
  include_once("$srcdir/log.inc");
@@ -22,8 +31,7 @@ $fake_register_globals=false;
 
  $info_msg = "";
 
- $thisauth = (acl_check('acct', 'bill') == 'write');
- if (! $thisauth) die(htmlspecialchars(xl('Not authorized'),ENT_NOQUOTES));
+ if (!acl_check('acct', 'bill','','write')) die(htmlspecialchars(xl('Not authorized'),ENT_NOQUOTES));
 ?>
 <html>
 <head>
@@ -64,7 +72,7 @@ $tmp = sqlQuery("SELECT billing_note FROM form_encounter " .
 $fenote = $tmp['billing_note'];
 ?>
 
-<form method='post' action='edit_billnote.php?feid=<?php echo htmlspecialchars($feid,ENT_QUOTES); ?>'>
+<form method='post' action='edit_billnote.php?feid=<?php echo htmlspecialchars($feid,ENT_QUOTES); ?>' onsubmit='return top.restoreSession()'>
 
 <center>
 <textarea name='form_note' style='width:100%'><?php echo htmlspecialchars($fenote,ENT_NOQUOTES); ?></textarea>

@@ -25,13 +25,7 @@
 //
 // +------------------------------------------------------------------------------+
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../../interface/globals.php");
 $content = $_REQUEST['content'];
@@ -78,7 +72,7 @@ $content = $_REQUEST['content'];
             <tr class="text">
                 <td>
                     <?php
-                    $res = sqlStatement("SELECT * FROM list_options WHERE list_id='nation_notes_replace_buttons' ORDER BY seq");
+                    $res = sqlStatement("SELECT * FROM list_options WHERE list_id = 'nation_notes_replace_buttons' AND activity = 1 ORDER BY seq");
                     while($row = sqlFetchArray($res)){
                     ?>
                     <a href="#" onclick="replace_quest('<?php echo htmlspecialchars($row['option_id'],ENT_QUOTES);?>')" class="css_button"><span><?php echo htmlspecialchars($row['title'],ENT_QUOTES);?></span></a>

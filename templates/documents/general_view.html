@@ -1,10 +1,11 @@
 <head>
 <style type="text/css">@import url(library/dynarch_calendar.css);</style>
-<script type="text/javascript" src="library/dialog.js"></script>
+<script type="text/javascript" src="library/dialog.js?v={php} echo $v_js_includes; {/php}"></script>
 <script type="text/javascript" src="library/textformat.js"></script>
 <script type="text/javascript" src="library/dynarch_calendar.js"></script>
 {php} include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); {/php}
 <script type="text/javascript" src="library/dynarch_calendar_setup.js"></script>
+<script type="text/javascript" src="{php}echo $GLOBALS['assets_static_relative'] {/php}/jquery-min-1-9-1/index.js"></script>
 <script language="JavaScript">
  var mypcc = '{php} echo $GLOBALS['phone_country_code'] {/php}';
 
@@ -22,12 +23,9 @@
 
  // Called to show patient notes related to this document in the "other" frame.
  function showpnotes(docid) {literal}{{/literal}
-{php} if ($GLOBALS['concurrent_layout']) { {/php}
   var othername = (window.name == 'RTop') ? 'RBot' : 'RTop';
   parent.left_nav.forceDual();
-  parent.left_nav.setRadio(othername, 'pno');
   parent.left_nav.loadFrame('pno1', othername, 'patient_file/summary/pnotes.php?docid=' + docid);
-{php} } {/php}
   return false;
  {literal}}{/literal}
 
@@ -39,6 +37,71 @@
 	{literal}}{/literal}
  {literal}}{/literal}
 
+// For tagging it encounter
+function tagUpdate() {literal}{{/literal}
+	var f = document.forms['document_tag'];
+	if (f.encounter_check.checked) {literal}{{/literal}
+		if(f.visit_category_id.value==0) {literal}{{/literal}
+			alert(" {xl t='Please select visit category'}" );
+			return false;
+		{literal}}{/literal}
+	{literal}}{/literal} else if (f.encounter_id.value == 0 ) {literal}{{/literal}
+		alert(" {xl t='Please select encounter'}");
+		return false;	
+	{literal}}{/literal}
+	//top.restoreSession();
+	document.forms['document_tag'].submit();
+{literal}}{/literal}
+
+// For new or existing encounter
+function set_checkbox() {literal}{{/literal}
+	var f = document.forms['document_tag'];
+	if (f.encounter_check.checked) {literal}{{/literal}
+		f.encounter_id.disabled = true;
+		f.visit_category_id.disabled = false;
+		$('.hide_clear').attr('href','javascript:void(0);');
+	{literal}}{/literal} else {literal}{{/literal}
+		f.encounter_id.disabled = false;
+		f.visit_category_id.disabled = true;
+		f.visit_category_id.value = 0;
+		$('.hide_clear').attr('href','{$clear_encounter_tag}');
+	{literal}}{/literal}
+{literal}}{/literal}
+
+// For tagging it with image procedure
+function ImgProcedure() {literal}{{/literal}
+	var f = document.forms['img_procedure_tag'];
+	if(f.image_procedure_id.value == 0 ) {literal}{{/literal}
+		alert("{xl t='Please select image procedure'}");
+		return false;
+	{literal}}{/literal}
+	f.procedure_code.value = f.image_procedure_id.options[f.image_procedure_id.selectedIndex].getAttribute('data-code');
+	document.forms['img_procedure_tag'].submit();	
+{literal}}{/literal}
+ // Process click on Import link.
+ function import_ccr(docid) {literal}{
+  top.restoreSession();
+  $.ajax({
+    url: "library/ajax/ccr_import_ajax.php",
+    type: "POST",
+    dataType: "html",
+    data:
+    {
+      ccr_ajax : "yes",
+      document_id : docid,
+    },
+    success: function(data){
+      alert(data);
+      top.restoreSession();
+      document.location.reload();
+    },
+    error:function(){
+      alert("failure");
+    }
+  });
+ }{/literal}
+
+
 </script>
 
 </head>
@@ -46,12 +109,26 @@
 <table valign="top" width="100%">
     <tr>
         <td>
-            <a class="css_button" href="{$web_path}" onclick="top.restoreSession()"><span>{xl t='Download'}</span></a>
+            <div style="margin-bottom: 6px;padding-bottom: 6px;border-bottom:3px solid gray;">
+            <h4>{$file->get_url_web()}
+              <div class="btn-group btn-toggle"> 
+                <button class="btn btn-xs btn-default properties">{xl t='Properties'}</button>
+                <button class="btn btn-xs btn-primary active">{xl t='Contents'}</button>
+              </div>
+            <span style="float:right;">
+            <a class="css_button" href="{$web_path}" title="{xl t='Original file'}" onclick="top.restoreSession()"><span>{xl t='Download'}</span></a>
             <a class="css_button" href='' onclick='return showpnotes({$file->get_id()})'><span>{xl t='Show Notes'}</span></a>
             {$delete_string}
+            {if $file->get_ccr_type($file->get_id()) eq "CCR" and ($file->get_mimetype($file->get_id()) eq "application/xml" or $file->get_mimetype($file->get_id()) eq "text/xml") and
+            $file->get_imported($file->get_id()) eq 0 }
+            <a class="css_button" href='javascript:' onclick='return import_ccr({$file->get_id()})'><span>{xl t='Import'}</span></a>
+            {/if}
+            </span>
+            </h4>
+            </div>
         </td>
     </tr>
-    <tr>
+    <tr id="DocProperties" style="display:none;">
 		<td valign="top">
 			{if !$hide_encryption}
 			<div class="text">
@@ -138,6 +215,49 @@
                 </form>
             </div>
 
+			<br/>
+			
+			<div class="text">
+			   <form method="post" name="document_tag" id="document_tag" action="{$TAG_ACTION}" onsubmit="return top.restoreSession()">
+
+				<div >
+				   <div style="float:left">
+					   <b>{xl t='Tag to Encounter'}</b>&nbsp;
+				   </div>
+
+				   <div style="float:none">
+					   <a href="javascript:;" onclick="tagUpdate();">(<span>{xl t='submit'})</span></a>
+				   </div>
+			   </div>
+
+				 <div>
+					<select id="encounter_id"  name="encounter_id"  >{$ENC_LIST}</select>&nbsp;
+					<a href="{$clear_encounter_tag}" class="hide_clear">(<span>{xl t='clear'})</span></a>&nbsp;&nbsp;
+					<input type="checkbox" name="encounter_check" id="encounter_check"  onclick='set_checkbox(this)'/> <label for="encounter_check"><b>{xl t='Create Encounter'}</b></label>&nbsp;&nbsp;
+					   {xl t='Visit Category'} : &nbsp;<select id="visit_category_id"  name="visit_category_id"  disabled>{$VISIT_CATEGORY_LIST}</select>&nbsp; 
+
+			   </div>
+			   </form>
+		   </div>
+		   <br/>
+		   <div class="text">
+			<form method="post" name="img_procedure_tag" id="img_procedure_tag" action="{$IMG_PROCEDURE_TAG_ACTION}" onsubmit="return top.restoreSession()">
+			<input type='hidden' name='procedure_code' value=''>
+			<div>
+				<div style="float:left">
+					<b>{xl t='Tag to Image Procedure'}</b>&nbsp;
+				</div>
+				<div style="float:none">
+					<a href="javascript:;" onclick="ImgProcedure();">(<span>{xl t='submit'})</span></a>
+				</div>
+			</div>
+			<div>
+				<select id="image_procedure_id"  name="image_procedure_id">{$IMAGE_PROCEDURE_LIST}</select>&nbsp;
+				<a href="{$clear_procedure_tag}">(<span>{xl t='clear'})</span></a>
+			</div>
+			</form>
+		   </div>	
+
             <br/>
 
             <form name="notes" method="post" action="{$NOTE_ACTION}" onsubmit="return top.restoreSession()">
@@ -147,7 +267,19 @@
                         <b>{xl t='Notes'}</b>&nbsp;
                     </div>
                     <div style="float:none">
-                        <a href="javascript:;" onclick="document.forms['notes'].submit();">(<span>{xl t='add'}</span>)</a>
+                        <a href="javascript:;" onclick="document.notes.identifier.value='no';document.forms['notes'].submit();">(<span>{xl t='add'}</span>)</a>
+                    	&nbsp;&nbsp;&nbsp;<b>{xl t='Email'}</b>&nbsp;
+                    	<input type="text" size="25" name="provide_email" id="provide_email" />
+                    	<input type="hidden" name="identifier" id="identifier" />
+                        <a href="javascript:;" onclick="javascript:document.notes.identifier.value='yes';document.forms['notes'].submit();">
+                        	(<span>{xl t='Send'}</span>)
+                        </a>
+                    </div>
+                    <div>
+                        
+                    </div>
+                    <div style="float:none">
+                    	
                     </div>
                 <div>
                     <textarea cols="53" rows="8" wrap="virtual" name="note" style="width:100%"></textarea><br>
@@ -161,19 +293,21 @@
                         {xl t='Note'} #{$note->get_id()}
                         {xl t='Date:'} {$note->get_date()}
                         {$note->get_note()}
+                        {if $note->get_owner()}
+                            &nbsp;-{user_info id=$note->get_owner()}
+                        {/if}
                         </div>
                         {/foreach}
-                        {/if}
+                    {/if}
                     </div>
                 </div>
             </div>
             </form>
-
+            <h4>{xl t='Contents'}</h4>
 		</td>
 	</tr>
-	<tr>
+	<tr id="DocContents">
 		<td>
-            <div class="text"><b>{xl t='Content'}</b></div>
             {if $file->get_mimetype() eq "image/tiff"}
 			<embed frameborder="0" type="{$file->get_mimetype()}" src="{$web_path}as_file=false"></embed>
 			{elseif $file->get_mimetype() eq "image/png" or
@@ -190,5 +324,18 @@
 	</tr>
 </table>
 <script language='JavaScript'>
+{literal}
+$('.btn-toggle').click(function() {
+    $(this).find('.btn').toggleClass('active');  
+    
+    if ($(this).find('.btn-primary').length >0) {
+        $(this).find('.btn').toggleClass('btn-primary');
+    }
+
+    $(this).find('.btn').toggleClass('btn-default');
+    var show_prop = ($(this).find('.properties.active').length > 0 ? 'block':'none');
+    $("#DocProperties").css('display', show_prop);
+});
+{/literal}
  Calendar.setup({literal}{{/literal}inputField:"docdate", ifFormat:"%Y-%m-%d", button:"img_docdate"{literal}}{/literal});
 </script>

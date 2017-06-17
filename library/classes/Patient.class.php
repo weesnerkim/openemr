@@ -8,8 +8,6 @@ This file was generated on %date% at %time%
 The original location of this file is /home/duhlman/uml-generated-code/prescription.php
 **************************************************************************/
 
-require_once("ORDataObject.class.php");
-require_once("Provider.class.php");
 /**
  * class Patient
  *
@@ -27,7 +25,7 @@ class Patient extends ORDataObject{
 	/**
 	 * Constructor sets all Prescription attributes to their default value
 	 */
-	function Patient($id = "")	{
+	function __construct($id = "")	{
 		$this->id = $id;
 		$this->_table = "patient_data";
 		$this->pubpid = "";
@@ -45,7 +43,7 @@ class Patient extends ORDataObject{
 			$res = sqlQuery("SELECT providerID,fname,lname,mname ".
                                         ", DATE_FORMAT(DOB,'%m/%d/%Y') as date_of_birth ".
                                         ", pubpid ".
-                                        " from " . $this->_table ." where pid =". mysql_real_escape_string($this->id));
+                                        " from " . $this->_table ." where pid =". add_escape_custom($this->id));
 			if (is_array($res)) {
 				$this->pubpid = $res['pubpid'];
 				$this->lname = $res['lname'];

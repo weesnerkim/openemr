@@ -2,7 +2,6 @@
 //INCLUDES, DO ANY ACTIONS, THEN GET OUR DATA
 include_once("../globals.php");
 include_once("$srcdir/registry.inc");
-include_once("$srcdir/sql.inc");
 include_once("../../library/acl.inc");
 include_once("batchcom.inc.php");
 
@@ -18,14 +17,14 @@ if (!$thisauth) {
 
  $type = 'SMS/Email Settings';
 // process form
-if ($_POST['form_action']=='Save') 
+if ($_POST['form_action']=='Save')
 {
     if ($_POST['Send_SMS_Before_Hours']=="") $form_err.=xl('Empty value in "SMS Hours"','','<br>');
     if ($_POST['Send_Email_Before_Hours']=="") $form_err.=xl('Empty value in "Email Hours"','','<br>');
     if ($_POST['SMS_gateway_username']=="") $form_err.=xl('Empty value in "Username"','','<br>');
     if ($_POST['SMS_gateway_password']=="") $form_err.=xl('Empty value in "Password"','','<br>');
     //process sql
-    if (!$form_err) 
+    if (!$form_err)
     {
         $sql_text=" ( `SettingsId` , `Send_SMS_Before_Hours` , `Send_Email_Before_Hours` , `SMS_gateway_password` , `SMS_gateway_apikey` , `SMS_gateway_username` , `type` ) ";
         $sql_value=" ( '".$_POST[SettingsId]."' , '".$_POST[Send_SMS_Before_Hours]."' , '".$_POST[Send_Email_Before_Hours]."' , '".$_POST[SMS_gateway_password]."' , '".$_POST[SMS_gateway_apikey]."' , '".$_POST[SMS_gateway_username]."' , '".$type."' ) ";
@@ -34,7 +33,7 @@ if ($_POST['form_action']=='Save')
         $id = sqlInsert($query);
         $sql_msg="ERROR!... in Update";
         if($id)    $sql_msg="SMS/Email Alert Settings Updated Successfully";
-    } 
+    }
 }
 
 // fetch data from table
@@ -56,8 +55,6 @@ if($result)
 <head>
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
 <link rel="stylesheet" href="batchcom.css" type="text/css">
-<script type="text/javascript" src="../../library/overlib_mini.js"></script>
-<script type="text/javascript" src="../../library/calendar.js"></script>
 
 
 </head>
@@ -94,7 +91,7 @@ if($result)
         <br>
         <?php xl('SMS Gateway API key','e')?> :
         <INPUT TYPE="text" NAME="SMS_gateway_apikey" size="40" value="<?php $SMS_gateway_apikey?>">
-        
+
         <br><br>
         <INPUT TYPE="submit" name="form_action" value="Save">
     </div>

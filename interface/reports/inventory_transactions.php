@@ -1,5 +1,5 @@
 <?php
-// Copyright (C) 2010 Rod Roark <rod@sunsetsystems.com>
+// Copyright (C) 2010-2016 Rod Roark <rod@sunsetsystems.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -8,18 +8,11 @@
 
 // This is an inventory transactions list.
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../globals.php");
 require_once("$srcdir/patient.inc");
 require_once("$srcdir/acl.inc");
-require_once("$srcdir/formatting.inc.php");
 
 function bucks($amount) {
   if ($amount != 0) return oeFormatMoney($amount);
@@ -181,27 +174,43 @@ else {
   #report_parameters_daterange {visibility: visible; display: inline;}
   #report_results {margin-top: 30px;}
  }
+
  /* specifically exclude some from the screen */
  @media screen {
   #report_parameters_daterange {visibility: hidden; display: none;}
  }
+
  body       { font-family:sans-serif; font-size:10pt; font-weight:normal }
  .dehead    { color:#000000; font-family:sans-serif; font-size:10pt; font-weight:bold }
  .detail    { color:#000000; font-family:sans-serif; font-size:10pt; font-weight:normal }
+
+ #report_results table thead {
+  font-size:10pt;
+ }
 </style>
 
 <style type="text/css">@import url(../../library/dynarch_calendar.css);</style>
 <script type="text/javascript" src="../../library/dynarch_calendar.js"></script>
 <?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
 <script type="text/javascript" src="../../library/dynarch_calendar_setup.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-9-1/index.js"></script>
+<script type="text/javascript" src="../../library/js/report_helper.js?v=<?php echo $v_js_includes; ?>"></script>
 
 <script language='JavaScript'>
+
+ $(document).ready(function() {
+  oeFixedHeaderSetup(document.getElementById('mymaintable'));
+  var win = top.printLogSetup ? top : opener.top;
+  win.printLogSetup(document.getElementById('printbutton'));
+ });
+
  function mysubmit(action) {
   var f = document.forms[0];
   f.form_action.value = action;
   top.restoreSession();
   f.submit();
  }
+
 </script>
 
 </head>
@@ -221,7 +230,7 @@ else {
   <td width='50%'>
    <table class='text'>
     <tr>
-     <td class='label'>
+     <td class='label_custom'>
       <?php echo htmlspecialchars(xl('Type'), ENT_NOQUOTES); ?>:
      </td>
      <td nowrap>
@@ -243,7 +252,7 @@ foreach (array(
 ?>
       </select>
      </td>
-     <td class='label'>
+     <td class='label_custom'>
       <?php echo htmlspecialchars(xl('From'), ENT_NOQUOTES); ?>:
      </td>
      <td nowrap>
@@ -255,7 +264,7 @@ foreach (array(
        id='img_from_date' border='0' alt='[?]' style='cursor:pointer'
        title='<?php echo htmlspecialchars(xl('Click here to choose a date'), ENT_QUOTES); ?>'>
      </td>
-     <td class='label'>
+     <td class='label_custom'>
       <?php xl('To','e'); ?>:
      </td>
      <td nowrap>
@@ -278,7 +287,7 @@ foreach (array(
        <span><?php echo htmlspecialchars(xl('Submit'), ENT_NOQUOTES); ?></span>
       </a>
 <?php if ($form_action) { ?>
-      <a href='#' class='css_button' onclick='window.print()' style='margin-left:1em'>
+      <a href='#' class='css_button' id='printbutton' style='margin-left:1em'>
        <span><?php echo htmlspecialchars(xl('Print'), ENT_NOQUOTES); ?></span>
       </a>
       <a href='#' class='css_button' onclick='mysubmit("export")' style='margin-left:1em'>
@@ -296,7 +305,8 @@ foreach (array(
 <?php if ($form_action) { // if submit (already not export here) ?>
 
 <div id="report_results">
-<table border='0' cellpadding='1' cellspacing='2' width='98%'>
+<table border='0' cellpadding='1' cellspacing='2' width='98%' id='mymaintable' class='mymaintable'>
+ <thead>
  <tr bgcolor="#dddddd">
   <td class="dehead">
    <?php echo htmlspecialchars(xl('Date'), ENT_NOQUOTES); ?>
@@ -329,6 +339,8 @@ foreach (array(
    <?php echo htmlspecialchars(xl('Notes'), ENT_NOQUOTES); ?>
   </td>
  </tr>
+ </thead>
+ <tbody>
 <?php
 } // end if submit
 } // end not export
@@ -354,9 +366,9 @@ if ($form_action) { // if submit or export
     "LEFT JOIN patient_data AS p ON p.pid = s.pid " .
     "LEFT JOIN users AS u ON u.id = s.distributor_id " .
     "LEFT JOIN list_options AS lo1 ON lo1.list_id = 'warehouse' AND " .
-    "lo1.option_id = i1.warehouse_id " .
+    "lo1.option_id = i1.warehouse_id AND lo1.activity = 1 " .
     "LEFT JOIN list_options AS lo2 ON lo2.list_id = 'warehouse' AND " .
-    "lo2.option_id = i2.warehouse_id " .
+    "lo2.option_id = i2.warehouse_id AND lo2.activity = 1 " .
     "LEFT JOIN form_encounter AS fe ON fe.pid = s.pid AND fe.encounter = s.encounter " .
     "WHERE s.sale_date >= ? AND s.sale_date <= ? ";
   if ($form_trans_type == 2) { // purchase/return
@@ -407,6 +419,7 @@ if ($form_action) { // if submit or export
 if ($form_action != 'export') {
   if ($form_action) {
 ?>
+ </tbody>
 </table>
 </div>
 <?php

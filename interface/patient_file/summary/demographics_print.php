@@ -1,5 +1,5 @@
 <?php
-// Copyright (C) 2009 Rod Roark <rod@sunsetsystems.com>
+// Copyright (C) 2009-2015 Rod Roark <rod@sunsetsystems.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -21,9 +21,8 @@ $CPR = 4; // cells per row
 $result = getPatientData($pid, "*, DATE_FORMAT(DOB,'%Y-%m-%d') as DOB_YMD"); 
 $result2 = getEmployerData($pid);
 // Check authorization.
-$thisauth = acl_check('patients', 'demo');
 if ($pid) {
-  if (!$thisauth != 'write')
+  if (!acl_check('patients','demo','','write'))
     die(xl('Demographics not authorized.'));
   if ($result['squad'] && ! acl_check('squads', $result['squad']))
     die(xl('You are not authorized to access this squad.'));
@@ -200,7 +199,7 @@ end_group();
 
 <!-- This should really be in the onload handler but that seems to be unreliable and can crash Firefox 3. -->
 <script language='JavaScript'>
-window.print();
+opener.top.printLogPrint(window);
 </script>
 
 </body>

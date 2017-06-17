@@ -1,17 +1,33 @@
 <?php
-// Copyright (C) 2010 OpenEMR Support LLC
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * Message and Reminder Center UI
+ *
+ * 2013/02/08 Minor tweaks by EMR Direct to allow integration with Direct messaging
+ * 2013-03-27 by sunsetsystems: Fixed some weirdness with assigning a message recipient,
+ *   and allowing a message to be closed with a new note appended and no recipient.
+ *
+ * Copyright (c) 2010 OpenEMR Support LLC
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author OpenEMR Support LLC
+ * @author Roberto Vasquez <robertogagliotta@gmail.com>
+ * @author Rod Roark <rod@sunsetsystems.com>
+ * @author Brady Miller <brady.g.miller@gmail.com>
+ * @link http://www.open-emr.org
+ */
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../../globals.php");
 require_once("$srcdir/pnotes.inc");
@@ -19,23 +35,30 @@ require_once("$srcdir/patient.inc");
 require_once("$srcdir/acl.inc");
 require_once("$srcdir/log.inc");
 require_once("$srcdir/options.inc.php");
-require_once("$srcdir/formdata.inc.php");
-require_once("$srcdir/classes/Document.class.php");
 require_once("$srcdir/gprelations.inc.php");
-require_once("$srcdir/formatting.inc.php");
 ?>
 <html>
 <head>
 
 <?php html_header_show();?>
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
-<script type="text/javascript" src="../../../library/dialog.js"></script>
+<script type="text/javascript" src="../../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 <script type="text/javascript" src="../../../library/textformat.js"></script>
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot']; ?>/library/js/jquery.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
 </head>
 
 <body class="body_top">
+
+<span class="title"><?php echo xlt('Message and Reminder Center'); ?></span>
+<br /><br />
+<span class="title"><?php echo xlt('Reminders'); ?></span>
+
 <?php
+
+        // TajEmo Work by CB 2012/01/11 02:51:25 PM adding dated reminders
+        // I am asuming that at this point security checks have been performed
+        require_once '../dated_reminders/dated_reminders.php';
+
 // Check to see if the user has Admin rights, and if so, allow access to See All.
 $showall = isset($_GET['show_all']) ? $_GET['show_all'] : "" ;
 if ($showall == "yes") {
@@ -45,22 +68,62 @@ else
 {
     $show_all= "no";
 }
-if (acl_check('admin', 'super'    )) {
-if ($show_all=='yes') {
-    $showall = "yes";
-    $lnkvar="'messages.php?show_all=no' name='Just Mine' onclick=\"top.restoreSession()\"> (".htmlspecialchars( xl('Just Mine'), ENT_NOQUOTES).")";
+
+// Collect active variable and applicable html code for links
+$form_active   = (isset($_REQUEST['form_active'])   ? $_REQUEST['form_active']   : FALSE);
+$form_inactive = (isset($_REQUEST['form_inactive']) ? $_REQUEST['form_inactive'] : FALSE);
+if ($form_active) {
+  $active = '1';
+  $activity_string_html = 'form_active=1';
+}
+else if ($form_inactive) {
+  $active = '0';
+  $activity_string_html = 'form_inactive=1';
 }
 else {
-    $showall = "no";
-    $lnkvar="'messages.php?show_all=yes' name='See All' onclick=\"top.restoreSession()\"> (".htmlspecialchars( xl('See All'), ENT_NOQUOTES).")";
+  $active = 'all';
+  $activity_string_html = '';
 }
-}
-?>
-<table><tr><td><span class="title"><?php echo htmlspecialchars( xl('Messages'), ENT_NOQUOTES); ?></span> <a class='more' href=<?php echo $lnkvar; ?></a></td></tr></table><br>
-<?php
+
 //collect the task setting
 $task= isset($_REQUEST['task']) ? $_REQUEST['task'] : "";
 
+if (acl_check('admin', 'super'    )) {
+if ($show_all=='yes') {
+    $showall = "yes";
+    $lnkvar="\"messages.php?show_all=no&$activity_string_html\" name='Just Mine' onclick=\"top.restoreSession()\"> (".htmlspecialchars( xl('Just Mine'), ENT_NOQUOTES).")";
+}
+else {
+    $showall = "no";
+    $lnkvar="\"messages.php?show_all=yes&$activity_string_html\" name='See All' onclick=\"top.restoreSession()\">(".htmlspecialchars( xl('See All'), ENT_NOQUOTES).")";
+}
+}
+?>
+<br>
+<table><tr><td><span class="title"> <?php echo htmlspecialchars(xl('Messages'), ENT_NOQUOTES); ?></span> <a class='more' href=<?php echo $lnkvar; ?></a></td></tr></table>
+<?php
+//show the activity links
+if (empty($task) || $task=="add" || $task=="delete") { ?>
+  <?php if ($active == "all") { ?>
+    <span><?php echo xlt('Show All'); ?></span>
+  <?php } else { ?>
+    <a href="messages.php" class="link" onclick="top.restoreSession()"><span><?php echo xlt('Show All'); ?></span></a>
+  <?php } ?>
+  |
+  <?php if ($active == '1') { ?>
+    <span><?php echo xlt('Show Active'); ?></span>
+  <?php } else { ?>
+    <a href="messages.php?form_active=1" class="link" onclick="top.restoreSession()"><span><?php echo xlt('Show Active'); ?></span></a>
+  <?php } ?>
+  |
+  <?php if ($active == '0') { ?>
+    <span><?php echo xlt('Show Inactive'); ?></span>
+  <?php } else { ?>
+    <a href="messages.php?form_inactive=1" class="link" onclick="top.restoreSession()"><span><?php echo xlt('Show Inactive'); ?></span></a>
+  <?php } ?>
+<?php } ?>
+
+<?php
 switch($task) {
     case "add" :
     {
@@ -69,10 +132,9 @@ switch($task) {
         $note = $_POST['note'];
         $noteid = $_POST['noteid'];
         $form_note_type = $_POST['form_note_type'];
-        $assigned_to = $_POST['assigned_to'];
         $form_message_status = $_POST['form_message_status'];
         $reply_to = $_POST['reply_to'];
-        $assigned_to_list = explode(';',$assigned_to);
+        $assigned_to_list = explode(';', $_POST['assigned_to']);
         foreach($assigned_to_list as $assigned_to){
           if ($noteid && $assigned_to != '-patient-') {
             updatePnote($noteid, $note, $form_note_type, $assigned_to, $form_message_status);
@@ -80,27 +142,36 @@ switch($task) {
           }
           else {
             if($noteid && $assigned_to == '-patient-'){
+              // When $assigned_to == '-patient-' we don't update the current note, but
+              // instead create a new one with the current note's body prepended and
+              // attributed to the patient.  This seems to be all for the patient portal.
               $row = getPnoteById($noteid);
-              if (! $row) die("getPnoteById() did not find id '$noteid'");
+              if (! $row) die("getPnoteById() did not find id '".text($noteid)."'");
               $pres = sqlQuery("SELECT lname, fname " .
                 "FROM patient_data WHERE pid = ?", array($reply_to) );
               $patientname = $pres['lname'] . ", " . $pres['fname'];
               $note .= "\n\n$patientname on ".$row['date']." wrote:\n\n";
               $note .= $row['body'];
             }
+            // There's no note ID, and/or it's assigned to the patient.
+            // In these cases a new note is created.
             addPnote($reply_to, $note, $userauthorized, '1', $form_note_type, $assigned_to, '', $form_message_status);
           }
         }
     } break;
+    case "savePatient":
     case "save" : {
         // Update alert.
         $noteid = $_POST['noteid'];
         $form_message_status = $_POST['form_message_status'];
-        updatePnoteMessageStatus($noteid,$form_message_status);
+        $reply_to = $_POST['reply_to'];
+        if ($task=="save")
+            updatePnoteMessageStatus($noteid,$form_message_status);
+        else
+            updatePnotePatient($noteid,$reply_to);
         $task = "edit";
         $note = $_POST['note'];
         $title = $_POST['form_note_type'];
-        $assigned_to = $_POST['assigned_to'];
         $reply_to = $_POST['reply_to'];
     }
     case "edit" : {
@@ -112,9 +183,6 @@ switch($task) {
         if ($result) {
             if ($title == ""){
                 $title = $result['title'];
-            }
-            if ($assigned_to == ""){
-                $assigned_to = $result['assigned_to'];
             }
             $body = $result['body'];
             if ($reply_to == ""){
@@ -136,14 +204,14 @@ switch($task) {
 if($task == "addnew" or $task == "edit") {
  // Display the Messages page layout.
 echo "
-<form name=new_note id=new_note action=\"messages.php?showall=$showall&sortby=$sortby&sortorder=$sortorder&begin=$begin\" method=post>
-<input type=hidden name=noteid id=noteid value=".htmlspecialchars( $noteid, ENT_QUOTES).">
+<form name=new_note id=new_note action=\"messages.php?showall=".attr($showall)."&sortby=".attr($sortby)."&sortorder=".attr($sortorder)."&begin=".attr($begin)."&$activity_string_html\" method=post>
+<input type=hidden name=noteid id=noteid value='".attr($noteid)."'>
 <input type=hidden name=task id=task value=add>";
 ?>
 <div id="pnotes"><center>
 <table border='0' cellspacing='8'>
  <tr>
-  <td class='text' align='center'>
+  <td class='text'>
    <b><?php echo htmlspecialchars( xl('Type'), ENT_NOQUOTES); ?>:</b>
    <?php
    if ($title == "") {
@@ -153,11 +221,42 @@ echo "
     generate_form_field(array('data_type'=>1,'field_id'=>'note_type','list_id'=>'note_type','empty_title'=>'SKIP','order_by'=>'title'), $title);
    ?>
    &nbsp; &nbsp;
+   <?php if ($task != "addnew" && $result['pid'] != 0) { ?>
+     <a class="patLink" onclick="goPid('<?php echo attr($result['pid']);?>')"><?php echo htmlspecialchars( xl('Patient'), ENT_NOQUOTES); ?>:</a>
+   <?php } else { ?>
+     <b class='<?php echo ($task=="addnew"?"required":"") ?>'><?php echo htmlspecialchars( xl('Patient'), ENT_NOQUOTES); ?>:</b>
+ <?php
+  }
+ if ($reply_to) {
+  $prow = sqlQuery("SELECT lname, fname,pid, pubpid, DOB  " .
+   "FROM patient_data WHERE pid = ?", array($reply_to) );
+  $patientname = $prow['lname'] . ", " . $prow['fname'];
+ }
+   if ($patientname == '') {
+       $patientname = xl('Click to select');
+   } ?>
+   <input type='text' size='10' name='form_patient' style='width:150px;<?php
+      echo ($task=="addnew"?"cursor:pointer;cursor:hand;":"") ?>' value='<?php
+      echo htmlspecialchars($patientname, ENT_QUOTES); ?>' <?php
+      echo (($task=="addnew" || $result['pid']==0) ? "onclick='sel_patient()' readonly":"disabled") ?> title='<?php
+      echo ($task=="addnew"?(htmlspecialchars( xl('Click to select patient'), ENT_QUOTES)):"") ?>'  />
+   <input type='hidden' name='reply_to' id='reply_to' value='<?php echo htmlspecialchars( $reply_to, ENT_QUOTES) ?>' />
+   &nbsp; &nbsp;
+   <b><?php echo htmlspecialchars( xl('Status'), ENT_NOQUOTES); ?>:</b>
+    <?php
+   if ($form_message_status == "") {
+       $form_message_status = 'New';
+   }
+    generate_form_field(array('data_type'=>1,'field_id'=>'message_status','list_id'=>'message_status','empty_title'=>'SKIP','order_by'=>'title'), $form_message_status); ?>
+  </td>
+</tr>
+<tr>
+  <td class='text'>
    <b><?php echo htmlspecialchars( xl('To'), ENT_QUOTES); ?>:</b>
-   <input type='textbox' name='assigned_to_text' id='assigned_to_text' size='50' readonly='readonly' value='<?php echo htmlspecialchars(xl("Select Users From The Dropdown List"), ENT_QUOTES)?>' >
+   <input type='textbox' name='assigned_to_text' id='assigned_to_text' size='40' readonly='readonly'
+    value='<?php echo htmlspecialchars(xl("Select Users From The Dropdown List"), ENT_QUOTES)?>' >
    <input type='hidden' name='assigned_to' id='assigned_to' >
    <select name='users' id='users' onchange='addtolist(this);' >
-
 <?php
   echo "<option value='" . htmlspecialchars( '--', ENT_QUOTES) . "'";
   echo ">" . htmlspecialchars( xl('Select User'), ENT_NOQUOTES);
@@ -168,41 +267,66 @@ $ures = sqlStatement("SELECT username, fname, lname FROM users " .
  "ORDER BY lname, fname");
  while ($urow = sqlFetchArray($ures)) {
   echo "    <option value='" . htmlspecialchars( $urow['username'], ENT_QUOTES) . "'";
-  if ($urow['username'] == $assigned_to) echo " selected";
   echo ">" . htmlspecialchars( $urow['lname'], ENT_NOQUOTES);
   if ($urow['fname']) echo ", " . htmlspecialchars( $urow['fname'], ENT_NOQUOTES);
   echo "</option>\n";
  }
-  echo "<option value='" . htmlspecialchars( '-patient-', ENT_QUOTES) . "'";
-  if ($assigned_to == '-patient-') echo " selected";
-  echo ">" . htmlspecialchars( '-Patient-', ENT_NOQUOTES);
-  echo "</option>\n";
+ if($GLOBALS['portal_offsite_enable']){
+      echo "<option value='" . htmlspecialchars( '-patient-', ENT_QUOTES) . "'";
+      echo ">" . htmlspecialchars( '-Patient-', ENT_NOQUOTES);
+      echo "</option>\n";
+ }
 ?>
    </select>
   </td>
-</tr>
-<tr>
-  <td class='text' align='center'>
-   <b class='<?php echo ($task=="addnew"?"required":"") ?>'><?php echo htmlspecialchars( xl('Patient'), ENT_NOQUOTES); ?>:</b><?php
- if ($reply_to) {
-  $prow = sqlQuery("SELECT lname, fname " .
-   "FROM patient_data WHERE pid = ?", array($reply_to) );
-  $patientname = $prow['lname'] . ", " . $prow['fname'];
- }
-   if ($patientname == "") {
-       $patientname = xl('Click to select');
-   } ?>
-   <input type='text' size='10' name='form_patient' style='width:150px;<?php echo ($task=="addnew"?"cursor:pointer;cursor:hand;":"") ?>' value='<?php echo htmlspecialchars($patientname, ENT_QUOTES); ?>' <?php echo ($task=="addnew"?"onclick='sel_patient()' readonly":"disabled") ?> title='<?php echo ($task=="addnew"?(htmlspecialchars( xl('Click to select patient'), ENT_QUOTES)):"") ?>'  />
-   <input type='hidden' name='reply_to' id='reply_to' value='<?php echo htmlspecialchars( $reply_to, ENT_QUOTES) ?>' />
-   &nbsp; &nbsp;
-   <b><?php echo htmlspecialchars( xl('Status'), ENT_NOQUOTES); ?>:</b>
-    <?php
-   if ($form_message_status == "") {
-       $form_message_status = 'New';
-   }
-    generate_form_field(array('data_type'=>1,'field_id'=>'message_status','list_id'=>'message_status','empty_title'=>'SKIP','order_by'=>'title'), $form_message_status); ?>
-  </td>
  </tr>
+
+<?php
+if ($noteid) {
+  // Get the related document IDs if any.
+  $tmp = sqlStatement("SELECT id1 FROM gprelations WHERE " .
+    "type1 = ? AND type2 = ? AND id2 = ?",
+    array('1', '6', $noteid));
+  if (sqlNumRows($tmp)) {
+    echo " <tr>\n";
+    echo "  <td class='text'><b>";
+    echo xlt('Linked document') . ":</b>\n";
+    while ($gprow = sqlFetchArray($tmp)) {
+      $d = new Document($gprow['id1']);
+      $enc_list = sqlStatement("SELECT fe.encounter,fe.date,openemr_postcalendar_categories.pc_catname FROM form_encounter AS fe ".
+        " left join openemr_postcalendar_categories on fe.pc_catid=openemr_postcalendar_categories.pc_catid  WHERE fe.pid = ? order by fe.date desc", array($prow['pid']));
+      $str_dob = htmlspecialchars(xl("DOB") . ":" . $prow['DOB'] . " " . xl("Age") . ":" . getPatientAge($prow['DOB']));
+      $pname = $prow['fname']." ".$prow['lname'];
+      echo "<a href='javascript:void(0);' ";
+      echo "onClick=\"gotoReport(".addslashes(attr($d->get_id())).",'".addslashes(attr($pname))."',".addslashes(attr($prow['pid'])).",".addslashes(attr($prow['pubpid'])).",'".addslashes(attr($str_dob))."');\">";
+      echo text($d->get_url_file());
+      echo "</a>\n";
+    }
+    echo "  </td>\n";
+    echo " </tr>\n";
+  }
+  // Get the related procedure order IDs if any.
+  $tmp = sqlStatement("SELECT id1 FROM gprelations WHERE " .
+    "type1 = ? AND type2 = ? AND id2 = ?",
+    array('2', '6', $noteid));
+  if (sqlNumRows($tmp)) {
+    echo " <tr>\n";
+    echo "  <td class='text'><b>";
+    echo xlt('Linked procedure order') . ":</b>\n";
+    while ($gprow = sqlFetchArray($tmp)) {
+      echo "   <a href='";
+      echo $GLOBALS['webroot'] . "/interface/orders/single_order_results.php?orderid=";
+      echo $gprow['id1'];
+      echo "' target='_blank' onclick='top.restoreSession()'>";
+      echo $gprow['id1'];
+      echo "</a>\n";
+    }
+    echo "  </td>\n";
+    echo " </tr>\n";
+  }
+}
+?>
+
  <tr>
   <td>
 
@@ -229,7 +353,8 @@ if ($noteid) {
 <!-- This is for displaying a new note. -->
 <input type="button" id="newnote" value="<?php echo htmlspecialchars( xl('Send message'), ENT_QUOTES); ?>">
 <input type="button" id="cancel" value="<?php echo htmlspecialchars( xl('Cancel'), ENT_QUOTES); ?>">
-<?php } ?>
+<?php }
+?>
 
 <br>
 </form></center></div>
@@ -247,11 +372,13 @@ $(document).ready(function(){
 
     var NewNote = function () {
         top.restoreSession();
-      if (document.forms[0].reply_to.value.length == 0) {
+      if (document.forms[0].reply_to.value.length == 0 || document.forms[0].reply_to.value == '0') {
        alert('<?php echo htmlspecialchars( xl('Please choose a patient'), ENT_QUOTES); ?>');
       }
-      else if (document.forms[0].assigned_to.value.length == 0) {
-       alert('<?php echo addslashes(xl('Recipient List Is Empty')); ?>');
+      else if (document.forms[0].assigned_to.value.length == 0 &&
+       document.getElementById("form_message_status").value != 'Done')
+      {
+       alert('<?php echo addslashes(xl('Recipient required unless status is Done')); ?>');
       }
       else
       {
@@ -278,18 +405,65 @@ $(document).ready(function(){
         $("#new_note").submit();
     }
 });
+ function gotoReport(doc_id,pname,pid,pubpid,str_dob){
+		EncounterDateArray=new Array;
+        CalendarCategoryArray=new Array;
+        EncounterIdArray=new Array;
+        Count = 0;
+	<?php
+		if(isset($enc_list) && sqlNumRows($enc_list) >0 ){
+			while($row = sqlFetchArray($enc_list)){
+	?>
+				        EncounterIdArray[Count]='<?php echo attr($row['encounter']); ?>';
+                                        EncounterDateArray[Count]='<?php echo attr(oeFormatShortDate(date("Y-m-d", strtotime($row['date'])))); ?>';
+                                        CalendarCategoryArray[Count]='<?php echo attr(xl_appt_category($row['pc_catname'])); ?>';
+                                        Count++;
+	<?php
+			}
+		}
+	?>
+  top.restoreSession();
+  $.ajax({
+    type:'get',
+    url:'<?php echo $GLOBALS['webroot']."/interface/patient_file/encounter/patient_encounter.php";?>',
+    data:{set_pid: pid},
+    async: false
+  });
+	parent.left_nav.setPatient(pname,pid,pubpid,'',str_dob);
+	parent.left_nav.setPatientEncounter(EncounterIdArray,EncounterDateArray,CalendarCategoryArray);
+  <?php if ($GLOBALS['new_tabs_layout']) { ?>
+    var docurl  = '../controller.php?document&view' + "&patient_id=" + pid + "&document_id=" + doc_id + "&";
+    var paturl = 'patient_file/summary/demographics.php?pid=' + pid;
+    parent.left_nav.loadFrame('dem1', 'pat', paturl);
+    parent.left_nav.loadFrame('doc0', 'enc', docurl);
+    top.activateTabByName('enc',true);
+  <?php } else  { ?>
+    var docurl  = '<?php  echo $GLOBALS['webroot'] . "/controller.php?document&view"; ?>' + "&patient_id=" + pid + "&document_id=" + doc_id + "&";
+    var paturl  = '<?php  echo $GLOBALS['webroot'] . "/interface/patient_file/summary/demographics.php?pid="; ?>' + pid;
+    var othername = (window.name == 'RTop') ? 'RBot' : 'RTop';
+    parent.frames[othername].location.href = paturl;
+    location.href = docurl;
+  <?php } ?>
+ }
  // This is for callback by the find-patient popup.
  function setpatient(pid, lname, fname, dob) {
   var f = document.forms[0];
   f.form_patient.value = lname + ', ' + fname;
   f.reply_to.value = pid;
+<?php if ($noteid) { ?>
+  //used when direct messaging service inserts a pnote with indeterminate patient
+  //to allow the user to assign the message to a patient.
+  top.restoreSession();
+  $("#task").val("savePatient");
+  $("#new_note").submit();
+<?php } ?>
  }
 
  // This invokes the find-patient popup.
  function sel_patient() {
   dlgopen('../../main/calendar/find_patient_popup.php', '_blank', 500, 400);
  }
- 
+
   function addtolist(sel){
     var itemtext = document.getElementById('assigned_to_text');
     var item = document.getElementById('assigned_to');
@@ -305,7 +479,7 @@ $(document).ready(function(){
       }
     }
   }
- 
+
 </script><?php
 }
 else {
@@ -317,31 +491,19 @@ else {
     $begin = isset($_REQUEST['begin']) ? $_REQUEST['begin'] : 0;
 
     for($i = 0; $i < count($sort); $i++) {
-        $sortlink[$i] = "<a href=\"messages.php?show_all=$showall&sortby=$sort[$i]&sortorder=asc\" onclick=\"top.restoreSession()\"><img src=\"../../../images/sortdown.gif\" border=0 alt=\"".htmlspecialchars( xl('Sort Up'), ENT_QUOTES)."\"></a>";
+        $sortlink[$i] = "<a href=\"messages.php?show_all=".attr($showall)."&sortby=".attr($sort[$i])."&sortorder=asc&$activity_string_html\" onclick=\"top.restoreSession()\"><img src=\"../../../images/sortdown.gif\" border=0 alt=\"".htmlspecialchars( xl('Sort Up'), ENT_QUOTES)."\"></a>";
     }
     for($i = 0; $i < count($sort); $i++) {
         if($sortby == $sort[$i]) {
             switch($sortorder) {
-                case "asc"      : $sortlink[$i] = "<a href=\"messages.php?show_all=$showall&sortby=$sortby&sortorder=desc\" onclick=\"top.restoreSession()\"><img src=\"../../../images/sortup.gif\" border=0 alt=\"".htmlspecialchars( xl('Sort Up'), ENT_QUOTES)."\"></a>"; break;
-                case "desc"     : $sortlink[$i] = "<a href=\"messages.php?show_all=$showall&sortby=$sortby&sortorder=asc\" onclick=\"top.restoreSession()\"><img src=\"../../../images/sortdown.gif\" border=0 alt=\"".htmlspecialchars( xl('Sort Down'), ENT_QUOTES)."\"></a>"; break;
+                case "asc"      : $sortlink[$i] = "<a href=\"messages.php?show_all=".attr($showall)."&sortby=".attr($sortby)."&sortorder=desc&$activity_string_html\" onclick=\"top.restoreSession()\"><img src=\"../../../images/sortup.gif\" border=0 alt=\"".htmlspecialchars( xl('Sort Up'), ENT_QUOTES)."\"></a>"; break;
+                case "desc"     : $sortlink[$i] = "<a href=\"messages.php?show_all=".attr($showall)."&sortby=".attr($sortby)."&sortorder=asc&$activity_string_html\" onclick=\"top.restoreSession()\"><img src=\"../../../images/sortdown.gif\" border=0 alt=\"".htmlspecialchars( xl('Sort Down'), ENT_QUOTES)."\"></a>"; break;
             } break;
         }
     }
     // Manage page numbering and display beneath the Messages table.
     $listnumber = 25;
-    $show_all='yes' ? $usrvar='_%' : $usrvar=$_SESSION['authUser'] ;
-    $sql = "SELECT pnotes.id, pnotes.user, pnotes.pid, pnotes.title, pnotes.date, pnotes.message_status, 
-      IF(pnotes.user != pnotes.pid,users.fname,patient_data.fname), IF(pnotes.user != pnotes.pid,users.lname,patient_data.lname), patient_data.fname, 
-      patient_data.lname FROM ((pnotes LEFT JOIN users ON pnotes.user = users.username) 
-      JOIN patient_data ON pnotes.pid = patient_data.pid) WHERE pnotes.message_status != 'Done' 
-      AND pnotes.deleted != '1' AND pnotes.assigned_to LIKE ?";
-    $result = sqlStatement($sql, array($usrvar) );
-    if(sqlNumRows($result) != 0) {
-        $total = sqlNumRows($result);
-    }
-    else {
-        $total = 0;
-    }
+    $total = getPnotesByUser($active,$show_all,$_SESSION['authUser'],true);
     if($begin == "" or $begin == 0) {
         $begin = 0;
     }
@@ -356,14 +518,14 @@ else {
         $start = 0;
     }
     if($prev >= 0) {
-        $prevlink = "<a href=\"messages.php?show_all=$showall&sortby=$sortby&sortorder=$sortorder&begin=$prev\" onclick=\"top.restoreSession()\"><<</a>";
+        $prevlink = "<a href=\"messages.php?show_all=".attr($showall)."&sortby=".attr($sortby)."&sortorder=".attr($sortorder)."&begin=".attr($prev)."&$activity_string_html\" onclick=\"top.restoreSession()\"><<</a>";
     }
     else {
         $prevlink = "<<";
     }
 
     if($next < $total) {
-        $nextlink = "<a href=\"messages.php?show_all=$showall&sortby=$sortby&sortorder=$sortorder&begin=$next\" onclick=\"top.restoreSession()\">>></a>";
+        $nextlink = "<a href=\"messages.php?show_all=".attr($showall)."&sortby=".attr($sortby)."&sortorder=".attr($sortorder)."&begin=".attr($next)."&$activity_string_html\" onclick=\"top.restoreSession()\">>></a>";
     }
     else {
         $nextlink = ">>";
@@ -371,7 +533,7 @@ else {
     // Display the Messages table header.
     echo "
     <table width=100%><tr><td><table border=0 cellpadding=1 cellspacing=0 width=90%  style=\"border-left: 1px #000000 solid; border-right: 1px #000000 solid; border-top: 1px #000000 solid;\">
-    <form name=wikiList action=\"messages.php?showall=$showall&sortby=$sortby&sortorder=$sortorder&begin=$begin\" method=post>
+    <form name=MessageList action=\"messages.php?showall=".attr($showall)."&sortby=".attr($sortby)."&sortorder=".attr($sortorder)."&begin=".attr($begin)."&$activity_string_html\" method=post>
     <input type=hidden name=task value=delete>
         <tr height=\"24\" style=\"background:lightgrey\">
             <td align=\"center\" width=\"25\" style=\"border-bottom: 1px #000000 solid; border-right: 1px #000000 solid;\"><input type=checkbox id=\"checkAll\" onclick=\"selectAll()\"></td>
@@ -388,17 +550,7 @@ else {
         </tr>";
         // Display the Messages table body.
         $count = 0;
-        $show_all='yes' ? $usrvar='_%' : $usrvar=$_SESSION['authUser'] ;
-        $sql = "SELECT pnotes.id, pnotes.user, pnotes.pid, pnotes.title, pnotes.date, pnotes.message_status, 
-          IF(pnotes.user != pnotes.pid,users.fname,patient_data.fname) as users_fname,
-          IF(pnotes.user != pnotes.pid,users.lname,patient_data.lname) as users_lname,
-          patient_data.fname as patient_data_fname, patient_data.lname as patient_data_lname
-          FROM ((pnotes LEFT JOIN users ON pnotes.user = users.username) 
-          JOIN patient_data ON pnotes.pid = patient_data.pid) WHERE pnotes.message_status != 'Done' 
-          AND pnotes.deleted != '1' AND pnotes.assigned_to LIKE ?".
-          " order by ".add_escape_custom($sortby)." ".add_escape_custom($sortorder).
-          " limit ".add_escape_custom($begin).", ".add_escape_custom($listnumber);
-        $result = sqlStatement($sql, array($usrvar) );
+        $result = getPnotesByUser($active,$show_all,$_SESSION['authUser'],false,$sortby,$sortorder,$begin,$listnumber);
         while ($myrow = sqlFetchArray($result)) {
             $name = $myrow['user'];
             $name = $myrow['users_lname'];
@@ -406,26 +558,30 @@ else {
                 $name .= ", " . $myrow['users_fname'];
             }
             $patient = $myrow['pid'];
-            $patient = $myrow['patient_data_lname'];
-            if ($myrow['patient_data_fname']) {
-                $patient .= ", " . $myrow['patient_data_fname'];
+            if ($patient>0) {
+                $patient = $myrow['patient_data_lname'];
+                if ($myrow['patient_data_fname']) {
+                    $patient .= ", " . $myrow['patient_data_fname'];
+                }
+            } else {
+                $patient = "* Patient must be set manually *";
             }
             $count++;
             echo "
             <tr id=\"row$count\" style=\"background:white\" height=\"24\">
                 <td align=\"center\" style=\"border-bottom: 1px #000000 solid; border-right: 1px #000000 solid;\"><input type=checkbox id=\"check$count\" name=\"delete_id[]\" value=\"" .
-	          htmlspecialchars( $myrow['id'], ENT_QUOTES) . "\" onclick=\"if(this.checked==true){ selectRow('row$count'); }else{ deselectRow('row$count'); }\"></td>
+	          attr( $myrow['id']) . "\" onclick=\"if(this.checked==true){ selectRow('row$count'); }else{ deselectRow('row$count'); }\"></td>
                 <td style=\"border-bottom: 1px #000000 solid; border-right: 1px #000000 solid;\"><table cellspacing=0 cellpadding=0 width=100%><tr><td width=5></td><td class=\"text\">" .
-	          htmlspecialchars( $name, ENT_NOQUOTES) . "</td><td width=5></td></tr></table></td>
-                <td style=\"border-bottom: 1px #000000 solid; border-right: 1px #000000 solid;\"><table cellspacing=0 cellpadding=0 width=100%><tr><td width=5></td><td class=\"text\"><a href=\"messages.php?showall=$showall&sortby=$sortby&sortorder=$sortorder&begin=$begin&task=edit&noteid=" .
-	          htmlspecialchars( $myrow['id'], ENT_QUOTES) . "\" onclick=\"top.restoreSession()\">" .
-		  htmlspecialchars( $patient, ENT_NOQUOTES) . "</a></td><td width=5></td></tr></table></td>
+	          text( $name) . "</td><td width=5></td></tr></table></td>
+                <td style=\"border-bottom: 1px #000000 solid; border-right: 1px #000000 solid;\"><table cellspacing=0 cellpadding=0 width=100%><tr><td width=5></td><td class=\"text\"><a href=\"messages.php?showall=".attr($showall)."&sortby=".attr($sortby)."&sortorder=".attr($sortorder)."&begin=".attr($begin)."&task=edit&noteid=" .
+	          attr( $myrow['id']) . "&$activity_string_html\" onclick=\"top.restoreSession()\">" .
+                text( $patient) . "</a></td><td width=5></td></tr></table></td>
                 <td style=\"border-bottom: 1px #000000 solid; border-right: 1px #000000 solid;\"><table cellspacing=0 cellpadding=0 width=100%><tr><td width=5></td><td class=\"text\">" .
-	          htmlspecialchars( $myrow['title'], ENT_NOQUOTES) . "</td><td width=5></td></tr></table></td>
+	          xlt( $myrow['title']) . "</td><td width=5></td></tr></table></td>
                 <td style=\"border-bottom: 1px #000000 solid; border-right: 1px #000000 solid;\"><table cellspacing=0 cellpadding=0 width=100%><tr><td width=5></td><td class=\"text\">" .
-	          htmlspecialchars( oeFormatShortDate(substr($myrow['date'], 0, strpos($myrow['date'], " "))), ENT_NOQUOTES) . "</td><td width=5></td></tr></table></td>
+	          text( oeFormatShortDate(substr($myrow['date'], 0, strpos($myrow['date'], " ")))) . "</td><td width=5></td></tr></table></td>
                 <td style=\"border-bottom: 1px #000000 solid;\"><table cellspacing=0 cellpadding=0 width=100%><tr><td width=5></td><td class=\"text\">" .
-	          htmlspecialchars( $myrow['message_status'], ENT_NOQUOTES) . "</td><td width=5></td></tr></table></td>
+	          xlt( $myrow['message_status']) . "</td><td width=5></td></tr></table></td>
             </tr>";
         }
     // Display the Messages table footer.
@@ -433,17 +589,18 @@ else {
     </form></table>
     <table border=0 cellpadding=5 cellspacing=0 width=90%>
         <tr>
-            <td class=\"text\"><a href=\"messages.php?showall=$showall&sortby=$sortby&sortorder=$sortorder&begin=$begin&task=addnew\" onclick=\"top.restoreSession()\">" .
+            <td class=\"text\"><a href=\"messages.php?showall=".attr($showall)."&sortby=".attr($sortby)."&sortorder=".attr($sortorder)."&begin=".attr($begin)."&task=addnew&$activity_string_html\" onclick=\"top.restoreSession()\">" .
               htmlspecialchars( xl('Add New'), ENT_NOQUOTES) . "</a> &nbsp; <a href=\"javascript:confirmDeleteSelected()\" onclick=\"top.restoreSession()\">" .
               htmlspecialchars( xl('Delete'), ENT_NOQUOTES) . "</a></td>
-            <td align=right class=\"text\">$prevlink &nbsp; $end of $total &nbsp; $nextlink</td>
+            <td align=right class=\"text amount-msg\">$prevlink &nbsp; $end of $total &nbsp; $nextlink</td>
         </tr>
-    </table></td></tr></table><br>"; ?>
+    </table></td></tr></table><br>";
+?>
 <script language="javascript">
 // This is to confirm delete action.
 function confirmDeleteSelected() {
     if(confirm("<?php echo htmlspecialchars( xl('Do you really want to delete the selection?'), ENT_QUOTES); ?>")) {
-        document.wikiList.submit();
+        document.MessageList.submit();
     }
 }
 // This is to allow selection of all items in Messages table for deletion.

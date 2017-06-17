@@ -1,6 +1,6 @@
 <?php
 //------------Forms generated from formsWiz
-include_once("../../globals.php");
+include_once(dirname(__FILE__).'/../../globals.php');
 include_once($GLOBALS["srcdir"]."/api.inc");
 function reviewofs_report( $pid, $encounter, $cols, $id) {
 $count = 0;
@@ -18,10 +18,10 @@ $key=ucwords(str_replace("_"," ",$key));
     
 //modified by BM 07-2009 for internationalization
 if ($key == "Additional Notes") {
-        print "<td><span class=bold>" . xl($key) . ": </span><span class=text>" . $value . "</span></td>";
+        print "<td><span class=bold>" . xl($key) . ": </span><span class=text>" . text($value) . "</span></td>";
 }
 else {
-        print "<td><span class=bold>" . xl($key) . ": </span><span class=text>" . xl($value) . "</span></td>";   
+        print "<td><span class=bold>" . xl($key) . ": </span><span class=text>" . xl($value) . "</span></td>";
 }
     
 $count++;

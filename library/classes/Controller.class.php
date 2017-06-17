@@ -1,10 +1,5 @@
 <?php
 
-require_once(dirname(__FILE__) . "/../Smarty.class.php");
-require_once(dirname(__FILE__) . "/../formdata.inc.php");
-if (!defined('SMARTY_DIR')) {
-    define("SMARTY_DIR", dirname(__FILE__) . "/../");
-}
 
 
 class Controller extends Smarty {
@@ -13,16 +8,16 @@ class Controller extends Smarty {
        var $_state;
        var $_args = array();
 
-       function Controller() {
-               parent::Smarty();
+       function __construct() {
+               parent::__construct();
                $this->template_mod = "general";
                $this->_current_action = "";
                $this->_state = true;
                $this->compile_dir = $GLOBALS['fileroot'] . "/interface/main/calendar/modules/PostCalendar/pntemplates/compiled";
                $this->compile_check = true;
+               $this->plugins_dir = array(dirname(__FILE__) . "/../smarty/plugins", $GLOBALS['vendor_dir'] . "/smarty/smarty/libs/plugins");
                $this->assign("PROCESS", "true");
-               $this->assign("HEADER", "<html><head>
-<?php html_header_show();?></head><body>");
+               $this->assign("HEADER", "<html><head><?php html_header_show();?></head><body>");
                $this->assign("FOOTER", "</body></html>");
                $this->assign("CONTROLLER", "controller.php?");
                $this->assign("CONTROLLER_THIS", "controller.php?" . $_SERVER['QUERY_STRING']);
@@ -51,15 +46,15 @@ class Controller extends Smarty {
                        $func = "set_" . $varname;
                        if (    (!(strpos("_",$varname) === 0)) && is_callable(array($obj,$func))       ) {
                                //echo "c: $func on w: "  . $var . "<br />";
-			       
+
 			       //modified 01-2010 by BGM to centralize to formdata.inc.php
 			       // have place several debug statements to allow standardized testing over next several months
                                if (!is_array($var)) {
-				       //DEBUG LINE - error_log("Controller populate before strip: ".$var, 0); 
+				       //DEBUG LINE - error_log("Controller populate before strip: ".$var, 0);
                                        $var = strip_escape_custom($var);
 				       //DEBUG LINE - error_log("Controller populate after strip: ".$var, 0);
                                }
-			   
+
                                call_user_func_array(array(&$obj,$func),array($var, $_POST));
                        }
                }
@@ -85,7 +80,7 @@ class Controller extends Smarty {
        }
                $args = array_reverse(array_keys($qarray));
                $c_name = preg_replace("/[^A-Za-z0-9_]/","",array_pop($args));
-               $parts = split("_",$c_name);
+               $parts = explode("_",$c_name);
                $name = "";
 
                foreach($parts as $p) {
@@ -96,7 +91,7 @@ class Controller extends Smarty {
                $c_action = preg_replace("/[^A-Za-z0-9_]/","",array_pop($args));
                $args = array_reverse($args);
 
-               if(!@call_user_func(array(Controller,"i_once"),$GLOBALS['fileroot'] ."/controllers/C_" . $c_name . ".class.php")) {
+               if(!call_user_func(array("Controller","i_once"),$GLOBALS['fileroot'] ."/controllers/C_" . $c_name . ".class.php")) {
                        echo "Unable to load controller $name\n, please check the first argument supplied in the URL and try again";
                        exit;
                }
@@ -114,7 +109,8 @@ class Controller extends Smarty {
                foreach ($args as $arg) {
                        $arg = preg_replace("/[^A-Za-z0-9_]/","",$arg);
                        //this is a workaround because call user func does funny things with passing args if they have no assigned value
-                       if (empty($qarray[$arg])) {
+                       //2013-02-10 EMR Direct: workaround modified since "0" is also considered empty;
+                       if (empty($qarray[$arg]) && $qarray[$arg]!="0") {
                                //if argument is empty pass null as value and arg as assoc array key
                                $args_array[$arg] = null;
                        }
@@ -153,7 +149,7 @@ class Controller extends Smarty {
        }
 
        function _link($action = "default",$inlining = false) {
-               $url_parts = split("&",$_SERVER['REQUEST_URI']);
+               $url_parts = explode("&",$_SERVER['REQUEST_URI']);
                $link = array_shift($url_parts);
                //print_r($url_parts);
 

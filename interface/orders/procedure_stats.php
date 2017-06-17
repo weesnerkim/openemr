@@ -1,20 +1,35 @@
 <?php
-// Copyright (C) 2010 Rod Roark <rod@sunsetsystems.com>
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-
-// This module creates statistical reports related to lab tests and
-// other procedure orders.
+/**
+ * This module creates statistical reports related to lab tests and
+ * other procedure orders.
+ *
+ *  Copyright (C) 2010-2016 Rod Roark <rod@sunsetsystems.com>
+ *  Copyright (C) 2015 Roberto Vasquez <robertogagliotta@gmail.com>
+ *  Copyright (C) 2017 Brady Miller <brady.g.miller@gmail.com>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Rod Roark <rod@sunsetsystems.com>
+ * @author  Roberto Vasquez <robertogagliotta@gmail.com>
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @link    http://www.open-emr.org
+ */
 
 require_once("../globals.php");
 require_once("../../library/patient.inc");
 require_once("../../library/acl.inc");
 require_once("../../custom/code_types.inc.php");
 require_once "$srcdir/options.inc.php";
-require_once "$srcdir/formdata.inc.php";
 
 // Might want something different here.
 //
@@ -98,7 +113,7 @@ function genEndRow() {
 
 function getListTitle($list, $option) {
   $row = sqlQuery("SELECT title FROM list_options WHERE " .
-    "list_id = '$list' AND option_id = '$option'");
+    "list_id = '$list' AND option_id = '$option' AND activity = 1");
   if (empty($row['title'])) return $option;
   return $row['title'];
 }
@@ -239,20 +254,32 @@ function process_result_code($row) {
 <head>
 <?php html_header_show(); ?>
 <title><?php echo $report_title; ?></title>
-<style type="text/css">@import url(../../library/dynarch_calendar.css);</style>
+
+<link rel="stylesheet" href="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-datetimepicker-2-5-4/build/jquery.datetimepicker.min.css">
+
 <style type="text/css">
  body       { font-family:sans-serif; font-size:10pt; font-weight:normal }
  .dehead    { color:#000000; font-family:sans-serif; font-size:10pt; font-weight:bold }
  .detail    { color:#000000; font-family:sans-serif; font-size:10pt; font-weight:normal }
 </style>
-<script type="text/javascript" src="../../library/textformat.js"></script>
-<script type="text/javascript" src="../../library/dynarch_calendar.js"></script>
-<?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
-<script type="text/javascript" src="../../library/dynarch_calendar_setup.js"></script>
+<script type="text/javascript" src="../../library/textformat.js?v=<?php echo $v_js_includes; ?>"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-3-1-1/index.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-datetimepicker-2-5-4/build/jquery.datetimepicker.full.min.js"></script>
+
 <script language="JavaScript">
  var mypcc = '<?php echo $GLOBALS['phone_country_code'] ?>';
 
+ $(document).ready(function() {
+  $('.datepicker').datetimepicker({
+   <?php $datetimepicker_timepicker = false; ?>
+   <?php $datetimepicker_showseconds = false; ?>
+   <?php $datetimepicker_formatInput = false; ?>
+   <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+   <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+  });
+ });
 </script>
+
 </head>
 
 <body leftmargin='0' topmargin='0' marginwidth='0' marginheight='0'>
@@ -313,17 +340,11 @@ function process_result_code($row) {
     <tr>
      <td colspan='2' class='detail' nowrap>
       <?php xl('From','e'); ?>
-      <input type='text' name='form_from_date' id='form_from_date' size='10' value='<?php echo $from_date ?>'
-       onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)' title='Start date yyyy-mm-dd'>
-      <img src='../pic/show_calendar.gif' align='absbottom' width='24' height='22'
-       id='img_from_date' border='0' alt='[?]' style='cursor:pointer'
-       title='<?php xl('Click here to choose a date','e'); ?>'>
+      <input type='text' class='datepicker' name='form_from_date' id='form_from_date' size='10' value='<?php echo $from_date ?>'
+       title='Start date yyyy-mm-dd'>
       <?php xl('To','e'); ?>
-      <input type='text' name='form_to_date' id='form_to_date' size='10' value='<?php echo $to_date ?>'
-       onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)' title='End date yyyy-mm-dd'>
-      <img src='../pic/show_calendar.gif' align='absbottom' width='24' height='22'
-       id='img_to_date' border='0' alt='[?]' style='cursor:pointer'
-       title='<?php xl('Click here to choose a date','e'); ?>'>
+      <input type='text' class='datepicker' name='form_to_date' id='form_to_date' size='10' value='<?php echo $to_date ?>'
+       title='End date yyyy-mm-dd'>
      </td>
     </tr>
    </table>
@@ -390,31 +411,41 @@ foreach (array(1 => 'Screen', 2 => 'Printer', 3 => 'Export File') as $key => $va
 
     // This gets us all results, with encounter and patient
     // info attached and grouped by patient and encounter.
+
+    $sqlBindArray = array();
+
     $query = "SELECT " .
       "po.patient_id, po.encounter_id, po.date_ordered, " .
       "po.provider_id, pd.regdate, " .
       "pd.sex, pd.DOB, pd.lname, pd.fname, pd.mname, " .
       "pd.contrastart, pd.referral_source$pd_fields, " .
-      "ps.abnormal, ps.procedure_type_id AS result_type, " .
-      "pto.name AS order_name, ptr.name AS result_name, ptr.related_code " .
+      "ps.abnormal, " .
+      // "pto.name AS order_name, ptr.name AS result_name, ptr.related_code " .
+      "pc.procedure_name AS order_name, ptr.name AS result_name, ptr.related_code " .
       "FROM procedure_order AS po " .
       "JOIN form_encounter AS fe ON fe.pid = po.patient_id AND fe.encounter = po.encounter_id " .
       "JOIN patient_data AS pd ON pd.pid = po.patient_id $sexcond" .
+      "JOIN procedure_order_code AS pc ON pc.procedure_order_id = po.procedure_order_id " .
       "JOIN procedure_report AS pr ON pr.procedure_order_id = po.procedure_order_id " .
+      "AND pr.procedure_order_seq = pc.procedure_order_seq " .
       "AND pr.date_report IS NOT NULL " .
       "JOIN procedure_result AS ps ON ps.procedure_report_id = pr.procedure_report_id " .
       "AND ps.result_status = 'final' " .
-      "JOIN procedure_type AS pto ON pto.procedure_type_id = po.procedure_type_id " .
-      "JOIN procedure_type AS ptr ON ptr.procedure_type_id = ps.procedure_type_id " .
-      "AND ptr.procedure_type NOT LIKE 'rec' " .
-      "WHERE po.date_ordered IS NOT NULL AND po.date_ordered >= '$from_date' " .
-      "AND po.date_ordered <= '$to_date' ";
-    if ($form_facility) {
-      $query .= "AND fe.facility_id = '$form_facility' ";
-    }
-    $query .= "ORDER BY fe.pid, fe.encounter, ps.procedure_type_id"; // needed?
+      // "JOIN procedure_type AS pto ON pto.procedure_type_id = pc.procedure_type_id " .
+      "JOIN procedure_type AS ptr ON ptr.lab_id = po.lab_id AND ptr.procedure_code = ps.result_code " .
+      "AND ptr.procedure_type LIKE 'res%' " .
+      "WHERE po.date_ordered IS NOT NULL AND po.date_ordered >= ? " .
+      "AND po.date_ordered <= ? ";
 
-    $res = sqlStatement($query);
+    array_push($sqlBindArray, $from_date, $to_date);
+
+    if ($form_facility) {
+      $query .= "AND fe.facility_id = ? ";
+      array_push($sqlBindArray, $form_facility);
+    }
+    $query .= "ORDER BY fe.pid, fe.encounter, ps.result_code"; // needed?
+
+    $res = sqlStatement($query, $sqlBindArray);
 
     while ($row = sqlFetchArray($res)) {
       process_result_code($row);
@@ -560,10 +591,9 @@ foreach (array(1 => 'Screen', 2 => 'Printer', 3 => 'Export File') as $key => $va
 </center>
 
 <script language='JavaScript'>
- Calendar.setup({inputField:"form_from_date", ifFormat:"%Y-%m-%d", button:"img_from_date"});
- Calendar.setup({inputField:"form_to_date", ifFormat:"%Y-%m-%d", button:"img_to_date"});
 <?php if ($form_output == 2) { ?>
- window.print();
+ var win = top.printLogPrint ? top : opener.top;
+ win.printLogPrint(window);
 <?php } ?>
 </script>
 

@@ -1,4 +1,22 @@
 <?php
+/**
+*
+* LICENSE: This program is free software; you can redistribute it and/or
+* modify it under the terms of the GNU General Public License
+* as published by the Free Software Foundation; either version 3
+* of the License, or (at your option) any later version.
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+* You should have received a copy of the GNU General Public License
+* along with this program.  If not, see <http://opensource.org/licenses/gpl-license.php>.
+*
+* @package   OpenEMR
+* @author    Brady Miller <brady.g.miller@gmail.com>
+* @link      http://www.open-emr.org
+*/
+
 include_once("../globals.php");
 
 if ($GLOBALS['full_new_patient_form']) {
@@ -32,12 +50,13 @@ $form_regdate   = $_POST['regdate'  ] ? trim($_POST['regdate'  ]) : date('Y-m-d'
 <head>
 <?php html_header_show(); ?>
 <link rel="stylesheet" href="<?php echo xl($css_header,'e');?>" type="text/css">
-<style type="text/css">@import url(../../library/dynarch_calendar.css);</style>
+<link rel="stylesheet" href="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-datetimepicker-2-5-4/build/jquery.datetimepicker.min.css">
 
-<script type="text/javascript" src="../../library/textformat.js"></script>
-<script type="text/javascript" src="../../library/dynarch_calendar.js"></script>
-<?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
-<script type="text/javascript" src="../../library/dynarch_calendar_setup.js"></script>
+<script type="text/javascript" src="../../library/textformat.js?v=<?php echo $v_js_includes; ?>"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-3-1-1/index.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-datetimepicker-2-5-4/build/jquery.datetimepicker.full.min.js"></script>
+
+<?php include_once("{$GLOBALS['srcdir']}/options.js.php"); ?>
 
 <script LANGUAGE="JavaScript">
 
@@ -67,22 +86,32 @@ $form_regdate   = $_POST['regdate'  ] ? trim($_POST['regdate'  ]) : date('Y-m-d'
   return true;
  }
 
+$(document).ready(function(){
+    $('.datepicker').datetimepicker({
+      <?php $datetimepicker_timepicker = false; ?>
+      <?php $datetimepicker_showseconds = false; ?>
+      <?php $datetimepicker_formatInput = false; ?>
+      <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+      <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+    });
+    $('.datetimepicker').datetimepicker({
+      <?php $datetimepicker_timepicker = true; ?>
+      <?php $datetimepicker_showseconds = false; ?>
+      <?php $datetimepicker_formatInput = false; ?>
+      <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+      <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+    });
+});
+
 </script>
 
 </head>
 
 <body class="body_top" onload="javascript:document.new_patient.fname.focus();">
 
-<?php if ($GLOBALS['concurrent_layout']) { ?>
 <form name='new_patient' method='post' action="new_patient_save.php"
  onsubmit='return validate()'>
 <span class='title'><?php xl('Add Patient Record','e');?></span>
-<?php } else { ?>
-<form name='new_patient' method='post' action="new_patient_save.php"
- target='_top' onsubmit='return validate()'>
-<a class="title" href="../main/main_screen.php" target="_top" onclick="top.restoreSession()">
-<?php xl('Add Patient Record','e');?></a>
-<?php } ?>
 
 <br><br>
 
@@ -103,7 +132,7 @@ $form_regdate   = $_POST['regdate'  ] ? trim($_POST['regdate'  ]) : date('Y-m-d'
    <select name='title'>
 <?php
 $ores = sqlStatement("SELECT option_id, title FROM list_options " .
-  "WHERE list_id = 'titles' ORDER BY seq");
+  "WHERE list_id = 'titles' AND activity = 1 ORDER BY seq");
 while ($orow = sqlFetchArray($ores)) {
   echo "    <option value='" . $orow['option_id'] . "'";
   if ($orow['option_id'] == $form_title) echo " selected";
@@ -151,7 +180,7 @@ while ($orow = sqlFetchArray($ores)) {
     <option value=''>Unassigned</option>
 <?php
 $ores = sqlStatement("SELECT option_id, title FROM list_options " .
-  "WHERE list_id = 'sex' ORDER BY seq");
+  "WHERE list_id = 'sex' AND activity = 1 ORDER BY seq");
 while ($orow = sqlFetchArray($ores)) {
   echo "    <option value='" . $orow['option_id'] . "'";
   if ($orow['option_id'] == $form_sex) echo " selected";
@@ -172,7 +201,7 @@ while ($orow = sqlFetchArray($ores)) {
     <option value=''>Unassigned</option>
 <?php
 $ores = sqlStatement("SELECT option_id, title FROM list_options " .
-  "WHERE list_id = 'refsource' ORDER BY seq");
+  "WHERE list_id = 'refsource' AND activity = 1 ORDER BY seq");
 while ($orow = sqlFetchArray($ores)) {
   echo "    <option value='" . $orow['option_id'] . "'";
   if ($orow['option_id'] == $form_refsource) echo " selected";
@@ -189,16 +218,9 @@ while ($orow = sqlFetchArray($ores)) {
    <span class='bold'><?php xl('Birth Date','e');?>: </span>
   </td>
   <td>
-   <input type='text' size='10' name='DOB' id='DOB'
+   <input type='text' size='10' class='datepicker' name='DOB' id='DOB'
     value='<?php echo $form_dob; ?>'
-    onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)'
     title='yyyy-mm-dd' />
-   <img src='../pic/show_calendar.gif' align='absbottom' width='24' height='22'
-    id='img_dob' border='0' alt='[?]' style='cursor:pointer'
-    title='Click here to choose a date'>
-   <script LANGUAGE="JavaScript">
-    Calendar.setup({inputField:"DOB", ifFormat:"%Y-%m-%d", button:"img_dob"});
-   </script>
   </td>
  </tr>
 
@@ -207,16 +229,9 @@ while ($orow = sqlFetchArray($ores)) {
    <span class='bold'><?php xl('Registration Date','e');?>: </span>
   </td>
   <td>
-   <input type='text' size='10' name='regdate' id='regdate'
+   <input type='text' size='10' class='datepicker' name='regdate' id='regdate'
     value='<?php echo $form_regdate; ?>'
-    onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)'
     title='yyyy-mm-dd' />
-   <img src='../pic/show_calendar.gif' align='absbottom' width='24' height='22'
-    id='img_regdate' border='0' alt='[?]' style='cursor:pointer'
-    title='Click here to choose a date'>
-   <script LANGUAGE="JavaScript">
-    Calendar.setup({inputField:"regdate", ifFormat:"%Y-%m-%d", button:"img_regdate"});
-   </script>
   </td>
  </tr>
 
@@ -244,7 +259,7 @@ while ($orow = sqlFetchArray($ores)) {
 </form>
 <script language="Javascript">
 <?php
-if ($form_pubpid) { 
+if ($form_pubpid) {
   echo "alert('" . xl('This patient ID is already in use!') . "');\n";
 }
 ?>

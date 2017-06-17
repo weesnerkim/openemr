@@ -74,7 +74,7 @@ class HTML_TreeMenu
     *
     * @access public
     */
-    function HTML_TreeMenu()
+    function __construct()
     {
         // Not much to do here :(
     }
@@ -108,7 +108,7 @@ class HTML_TreeMenu
     *                            type        => The type of the structure, currently
     *                                           can be either 'heyes' or 'kriesing'
     *                            nodeOptions => Default options for each node
-    *                            
+    *
     * @return object           The resulting HTML_TreeMenu object
     */
     function createFromStructure($params)
@@ -176,13 +176,13 @@ class HTML_TreeMenu
             case 'heyes_array':
                 // Need to create a HTML_TreeMenu object ?
                 if (!isset($params['treeMenu'])) {
-                    $treeMenu = &new HTML_TreeMenu();
+                    $treeMenu = new HTML_TreeMenu();
                     $parentID = 0;
                 } else {
                     $treeMenu = &$params['treeMenu'];
                     $parentID = $params['parentID'];
                 }
-                
+
                 // Loop thru the trees nodes
                 foreach ($params['structure']->getChildren($parentID) as $nodeID) {
                     $data = $params['structure']->getData($nodeID);
@@ -198,7 +198,7 @@ class HTML_TreeMenu
                         HTML_TreeMenu::createFromStructure($recurseParams);
                     }
                 }
-                
+
                 break;
 
             /**
@@ -208,11 +208,11 @@ class HTML_TreeMenu
             default:
                 // Need to create a HTML_TreeMenu object ?
                 if (!isset($params['treeMenu'])) {
-                    $treeMenu = &new HTML_TreeMenu();
+                    $treeMenu = new HTML_TreeMenu();
                 } else {
                     $treeMenu = &$params['treeMenu'];
                 }
-                
+
                 // Loop thru the trees nodes
                 foreach ($params['structure']->nodes->nodes as $node) {
                     $tag = $node->getTag();
@@ -232,7 +232,7 @@ class HTML_TreeMenu
 
         return $treeMenu;
     }
-    
+
     /**
     * Creates a treeMenu from XML. The structure of your XML should be
     * like so:
@@ -265,7 +265,7 @@ class HTML_TreeMenu
         // Supplied $xml is a string
         if (is_string($xml)) {
             require_once('XML/Tree.php');
-            $xmlTree = &new XML_Tree();
+            $xmlTree = new XML_Tree();
             $xmlTree->getTreeFromString($xml);
 
         // Supplied $xml is an XML_Tree object
@@ -278,7 +278,7 @@ class HTML_TreeMenu
         $treeStructure = Tree::createFromXMLTree($xmlTree, true);
         $treeStructure->nodes->traverse(create_function('&$node', '$tagData = $node->getTag(); $node->setTag($tagData["attributes"]);'));
 
-        
+
         return HTML_TreeMenu::createFromStructure(array('structure' => $treeStructure));
     }
 } // HTML_TreeMenu
@@ -362,16 +362,16 @@ class HTML_TreeNode
     * @var object
     */
     var $parent;
-    
+
     /**
     * Unique ID of this node
     * @var int
     */
     //commented out because it was causing Documents page to not show
-   //because of this redeclaration of $parent.  I do not know what the 
+   //because of this redeclaration of $parent.  I do not know what the
   // author's intention was in using this name twice or if it was a mistake
     //var $parent;
-    
+
 
     /**
     * Javascript event handlers;
@@ -404,7 +404,7 @@ class HTML_TreeNode
     *                       for the 'onexpand', 'oncollapse' and 'ontoggle' events which will be fired
     *                       whenever a node is collapsed and/or expanded.
     */
-    function HTML_TreeNode($options = array(), $events = array())
+    function __construct($options = array(), $events = array())
     {
         $this->text          = '';
         $this->link          = '';
@@ -504,7 +504,7 @@ class HTML_TreeMenu_Presentation
     *
     * @param object $structure The menu structure
     */
-    function HTML_TreeMenu_Presentation(&$structure)
+    function __construct(&$structure)
     {
         $this->menu = &$structure;
     }
@@ -598,9 +598,9 @@ class HTML_TreeMenu_DHTML extends HTML_TreeMenu_Presentation
     * @param array  $options   Array of options
     * @param bool   $isDynamic Whether the tree is dynamic or not
     */
-    function HTML_TreeMenu_DHTML(&$structure, $options = array(), $isDynamic = true)
+    function __construct(&$structure, $options = array(), $isDynamic = true)
     {
-        $this->HTML_TreeMenu_Presentation($structure);
+        parent::__construct($structure);
         $this->isDynamic = $isDynamic;
 
         // Defaults
@@ -670,7 +670,7 @@ class HTML_TreeMenu_DHTML extends HTML_TreeMenu_Presentation
     function _nodeToHTML($nodeObj, $prefix, $return = 'newNode', $currentDepth = 0, $maxDepthPrefix = null)
     {
         $prefix = empty($maxDepthPrefix) ? $prefix : $maxDepthPrefix;
-        
+
         $expanded  = $this->isDynamic ? ($nodeObj->expanded  ? 'true' : 'false') : 'true';
         $isDynamic = $this->isDynamic ? ($nodeObj->isDynamic ? 'true' : 'false') : 'false';
         $html = sprintf("\t %s = %s.addItem(new TreeNode('%s', %s, %s, %s, %s, '%s', '%s', %s));\n",
@@ -678,7 +678,7 @@ class HTML_TreeMenu_DHTML extends HTML_TreeMenu_Presentation
                         $prefix,
                         str_replace("'", "\\'", $nodeObj->text),
                         !empty($nodeObj->icon) ? "'" . $nodeObj->icon . "'" : 'null',
-                        !empty($nodeObj->link) ? "'" . $nodeObj->link . "'" : 'null',
+                        !empty($nodeObj->link) ? "'" . attr($nodeObj->link) . "'" : 'null',
                         $expanded,
                         $isDynamic,
                         $nodeObj->cssClass,
@@ -757,9 +757,9 @@ class HTML_TreeMenu_Listbox extends HTML_TreeMenu_Presentation
     *                           o linkTarget Target for the links. Defaults to "_self"
     *                           o submitText Text for the submit button. Defaults to "Go"
     */
-    function HTML_TreeMenu_Listbox($structure, $options = array())
+    function __construct($structure, $options = array())
     {
-        $this->HTML_TreeMenu_Presentation($structure);
+        parent::__construct($structure);
 
         $this->promoText  = null;
         $this->indentChar = '&nbsp;';
@@ -788,7 +788,7 @@ class HTML_TreeMenu_Listbox extends HTML_TreeMenu_Presentation
                 $nodeHTML .= $this->_nodeToHTML($this->menu->items[$i]);
             }
         }
-		
+
 		if ($this->promoText) {
         	return sprintf('<option value="">%s</option>%s', $this->promoText, $nodeHTML);
 		}

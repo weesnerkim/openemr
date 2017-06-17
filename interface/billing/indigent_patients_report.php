@@ -1,19 +1,32 @@
 <?php
-// Copyright (C) 2005-2010 Rod Roark <rod@sunsetsystems.com>
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * This is the Indigent Patients Report.  It displays a summary of
+ * encounters within the specified time period for patients without
+ * insurance.
+ *
+ *  Copyright (C) 2005-2015 Rod Roark <rod@sunsetsystems.com>
+ *  Copyright (C) 2017 Brady Miller <brady.g.miller@gmail.com>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Rod Roark <rod@sunsetsystems.com>
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @link    http://www.open-emr.org
+ */
 
-// This is the Indigent Patients Report.  It displays a summary of
-// encounters within the specified time period for patients without
-// insurance.
-
+use OpenEMR\Core\Header;
 require_once("../globals.php");
 require_once("$srcdir/patient.inc");
-require_once("$srcdir/sql-ledger.inc");
-require_once("$srcdir/formatting.inc.php");
 
 $alertmsg = '';
 
@@ -25,13 +38,10 @@ function bucks($amount) {
 $form_start_date = fixDate($_POST['form_start_date'], date("Y-01-01"));
 $form_end_date   = fixDate($_POST['form_end_date'], date("Y-m-d"));
 
-$INTEGRATED_AR = $GLOBALS['oer_config']['ws_accounting']['enabled'] === 2;
-
-if (!$INTEGRATED_AR) SLConnect();
 ?>
 <html>
 <head>
-<?php html_header_show(); ?>
+
 <style type="text/css">
 
 /* specifically include & exclude from printing */
@@ -56,12 +66,27 @@ if (!$INTEGRATED_AR) SLConnect();
         display: none;
     }
 }
-</style><link rel="stylesheet" href="<?php echo $css_header; ?>" type="text/css">
+
+</style>
+
+<?php Header::setupHeader('datetime-picker'); ?>
+
 <title><?php xl('Indigent Patients Report','e')?></title>
 
-<script type="text/javascript" src="../../library/js/jquery.1.3.2.js"></script>
-
 <script language="JavaScript">
+
+ $(document).ready(function() {
+  var win = top.printLogSetup ? top : opener.top;
+  win.printLogSetup(document.getElementById('printbutton'));
+
+  $('.datepicker').datetimepicker({
+    <?php $datetimepicker_timepicker = false; ?>
+    <?php $datetimepicker_showseconds = false; ?>
+    <?php $datetimepicker_formatInput = false; ?>
+    <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+    <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+  });
+ });
 
 </script>
 
@@ -84,25 +109,19 @@ if (!$INTEGRATED_AR) SLConnect();
 
 	<table class='text'>
 		<tr>
-			<td class='label'>
+			<td class='control-label'>
 			   <?php xl('Visits From','e'); ?>:
 			</td>
 			<td>
-			   <input type='text' name='form_start_date' id="form_start_date" size='10' value='<?php echo $form_start_date ?>'
-				onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)' title='yyyy-mm-dd'>
-			   <img src='../pic/show_calendar.gif' align='absbottom' width='24' height='22'
-				id='img_start_date' border='0' alt='[?]' style='cursor:pointer'
-				title='<?php xl('Click here to choose a date','e'); ?>'>
+			   <input type='text' class='datepicker form-control' name='form_start_date' id="form_start_date" size='10' value='<?php echo $form_start_date ?>'
+				title='yyyy-mm-dd'>
 			</td>
-			<td class='label'>
+			<td class='control-label'>
 			   <?php xl('To','e'); ?>:
 			</td>
 			<td>
-			   <input type='text' name='form_end_date' id="form_end_date" size='10' value='<?php echo $form_end_date ?>'
-				onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)' title='yyyy-mm-dd'>
-			   <img src='../pic/show_calendar.gif' align='absbottom' width='24' height='22'
-				id='img_end_date' border='0' alt='[?]' style='cursor:pointer'
-				title='<?php xl('Click here to choose a date','e'); ?>'>
+			   <input type='text' class='datepicker form-control' name='form_end_date' id="form_end_date" size='10' value='<?php echo $form_end_date ?>'
+				title='yyyy-mm-dd'>
 			</td>
 		</tr>
 	</table>
@@ -114,20 +133,17 @@ if (!$INTEGRATED_AR) SLConnect();
 	<table style='border-left:1px solid; width:100%; height:100%' >
 		<tr>
 			<td>
-				<div style='margin-left:15px'>
-					<a href='#' class='css_button' onclick='$("#form_refresh").attr("value","true"); $("#theform").submit();'>
-					<span>
-						<?php xl('Submit','e'); ?>
-					</span>
-					</a>
-
-					<?php if ($_POST['form_refresh']) { ?>
-					<a href='#' class='css_button' onclick='window.print()'>
-						<span>
-							<?php xl('Print','e'); ?>
-						</span>
-					</a>
-					<?php } ?>
+				<div class="text-center">
+          <div class="btn-group" role="group">
+					  <a href='#' class='btn btn-default btn-save' onclick='$("#form_refresh").attr("value","true"); $("#theform").submit();'>
+						  <?php echo xlt('Submit'); ?>
+					  </a>
+					  <?php if ($_POST['form_refresh']) { ?>
+					    <a href='#' class='btn btn-default btn-print' id='printbutton'>
+							  <?php echo xlt('Print'); ?>
+					    </a>
+					  <?php } ?>
+          </div>
 				</div>
 			</td>
 		</tr>
@@ -168,7 +184,7 @@ if (!$INTEGRATED_AR) SLConnect();
  </thead>
 
 <?php
-  if ($_POST['form_search']) {
+  if ($_POST['form_refresh']) {
 
     $where = "";
 
@@ -194,8 +210,6 @@ if (!$INTEGRATED_AR) SLConnect();
       $patient_id = $row['pid'];
       $encounter_id = $row['encounter'];
       $invnumber = $row['pid'] . "." . $row['encounter'];
-
-      if ($INTEGRATED_AR) {
         $inv_duedate = '';
         $arow = sqlQuery("SELECT SUM(fee) AS amount FROM drug_sales WHERE " .
           "pid = '$patient_id' AND encounter = '$encounter_id'");
@@ -213,17 +227,6 @@ if (!$INTEGRATED_AR) SLConnect();
           "pid = '$patient_id' AND encounter = '$encounter_id'");
         $inv_paid   += $arow['pay'];
         $inv_amount -= $arow['adj'];
-      }
-      else {
-        $ares = SLQuery("SELECT duedate, amount, paid FROM ar WHERE " .
-          "ar.invnumber = '$invnumber'");
-        if ($sl_err) die($sl_err);
-        if (SLRowCount($ares) == 0) continue;
-        $arow = SLGetRow($ares, 0);
-        $inv_amount  = $arow['amount'];
-        $inv_paid    = $arow['paid'];
-        $inv_duedate = $arow['duedate'];
-      }
       $total_amount += bucks($inv_amount);
       $total_paid   += bucks($inv_paid);
 
@@ -286,7 +289,6 @@ if (!$INTEGRATED_AR) SLConnect();
  </tr>
 <?php
   }
-  if (!$INTEGRATED_AR) SLClose();
 ?>
 
 </table>
@@ -301,18 +303,5 @@ if (!$INTEGRATED_AR) SLConnect();
 ?>
 </script>
 </body>
-
-<!-- stuff for the popup calendar -->
-<link rel='stylesheet' href='<?php echo $css_header ?>' type='text/css'>
-<style type="text/css">@import url(../../library/dynarch_calendar.css);</style>
-<script type="text/javascript" src="../../library/dynarch_calendar.js"></script>
-<?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
-<script type="text/javascript" src="../../library/dynarch_calendar_setup.js"></script>
-<script type="text/javascript" src="../../library/js/jquery.1.3.2.js"></script>
-
-<script language="Javascript">
- Calendar.setup({inputField:"form_start_date", ifFormat:"%Y-%m-%d", button:"img_start_date"});
- Calendar.setup({inputField:"form_end_date", ifFormat:"%Y-%m-%d", button:"img_end_date"});
-</script>
 
 </html>

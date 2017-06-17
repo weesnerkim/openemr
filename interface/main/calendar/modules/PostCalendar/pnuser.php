@@ -33,7 +33,6 @@ pnModAPILoad(__POSTCALENDAR__,'user');
 
 // Added to improve security and standardization of input data to be used in
 //  database insertion.
-require_once($GLOBALS['srcdir']."/formdata.inc.php");
 
 //=========================================================================
 //  start the main postcalendar application
@@ -69,7 +68,7 @@ function postcalendar_user_view()
                                           'jumpday',
                                           'jumpmonth',
                                           'jumpyear');
-    $Date =& postcalendar_getDate();
+    $Date =postcalendar_getDate();
     if(!isset($viewtype))   $viewtype = _SETTING_DEFAULT_VIEW;
     
     // added to allow the view & providers to remain as the user last saw it -- JRM
@@ -685,7 +684,7 @@ function postcalendar_user_submit($args)
             $old_dur_hours = $eventdata['event_dur_hours'];
             $old_dur_min = $eventdata['event_dur_minutes'];
             $old_duration = $eventdata['event_duration'];
-            $eventdata['event_subject'] = mysql_real_escape_string($ekey);
+            $eventdata['event_subject'] = add_escape_custom($ekey);
             $eventdata['event_status'] = _EVENT_TEMPORARY;
 
             if (!pnModAPIFunc(__POSTCALENDAR__,'user','submitEvent',$eventdata)) {
@@ -1082,7 +1081,7 @@ function postcalendar_user_search()
         if(!empty($s_topic)) $searchargs['s_topic'] = $s_topic;
         
         // some new search parameters introduced in the ajax_search form...  JRM March 2008
-        
+
         // the ajax_search form has form parameters for 'start' and 'end' already built in
         // so use them if available
         $tmpDate = pnVarCleanFromInput("start");

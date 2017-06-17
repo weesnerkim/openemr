@@ -1,49 +1,43 @@
 <?php
- // Copyright (C) 2005-2007 Rod Roark <rod@sunsetsystems.com>
- //
- // This program is free software; you can redistribute it and/or
- // modify it under the terms of the GNU General Public License
- // as published by the Free Software Foundation; either version 2
- // of the License, or (at your option) any later version.
+/* Copyright (C) 2005-2007 Rod Roark <rod@sunsetsystems.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ */
 
- /*
-  *
-  * This popup is called when adding/editing a calendar event
-  *
-  */
+/*
+ *
+ * This popup is called when adding/editing a calendar event
+ *
+ */
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
- include_once("../../globals.php");
- include_once("$srcdir/patient.inc");
- include_once("$srcdir/formdata.inc.php");
+include_once('../../globals.php');
+include_once("$srcdir/patient.inc");
 
- $info_msg = "";
+$info_msg = "";
 
  // If we are searching, search.
  //
- if ($_REQUEST['searchby'] && $_REQUEST['searchparm']) {
+if ($_REQUEST['searchby'] && $_REQUEST['searchparm']) {
   $searchby = $_REQUEST['searchby'];
   $searchparm = trim($_REQUEST['searchparm']);
 
   if ($searchby == "Last") {
-   $result = getPatientLnames("$searchparm","*");
+    $result = getPatientLnames("$searchparm","*");
   } elseif ($searchby == "Phone") {                  //(CHEMED) Search by phone number
-   $result = getPatientPhone("$searchparm","*");
+    $result = getPatientPhone("$searchparm","*");
   } elseif ($searchby == "ID") {
-   $result = getPatientId("$searchparm","*");
+    $result = getPatientId("$searchparm","*");
   } elseif ($searchby == "DOB") {
-   $result = getPatientDOB("$searchparm","*");
+    $result = getPatientDOB("$searchparm","*");
   } elseif ($searchby == "SSN") {
-   $result = getPatientSSN("$searchparm","*");
+    $result = getPatientSSN("$searchparm","*");
   }
- }
+}
 ?>
 
 <html>
@@ -51,7 +45,7 @@ $fake_register_globals=false;
 <?php html_header_show();?>
 <title><?php echo htmlspecialchars( xl('Patient Finder'), ENT_NOQUOTES); ?></title>
 <link rel="stylesheet" href='<?php echo $css_header ?>' type='text/css'>
-
+<script type="text/javascript" src="<?php echo $webroot ?>/interface/main/tabs/js/include_opener.js"></script>
 <style>
 form {
     padding: 0px;
@@ -129,7 +123,7 @@ form {
 }
 </style>
 
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery-1.2.2.min.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
 <!-- ViSolve: Verify the noresult parameter -->
 <?php
 if(isset($_GET["res"])){
@@ -222,16 +216,15 @@ foreach ($result as $iter) {
     $itermname = $iter['mname'];
     $iterdob   = $iter['DOB'];
 
-    // the special genericname2 of 'Billing' means something, but I'm not sure
-    // what, regardless it gets special coloring and an extra line of output
-    // in the 'name' column -- JRM
+    // If billing note exists, then it gets special coloring and an extra line of output
+    // in the 'name' column.
     $trClass = "oneresult";
-    if ($iter['genericname2'] == 'Billing') { $trClass .= " billing"; }
+    if (!empty($iter['billing_note'])) { $trClass .= " billing"; }
 
     echo " <tr class='".$trClass."' id='" .
         htmlspecialchars( $iterpid."~".$iterlname."~".$iterfname."~".$iterdob, ENT_QUOTES) . "'>";
     echo "  <td class='srName'>" . htmlspecialchars( $iterlname.", ".$iterfname." ".$itermname, ENT_NOQUOTES);
-    if ($iter['genericname2'] == 'Billing') { echo "<br>" . htmlspecialchars( $iter['genericval2'], ENT_NOQUOTES); }
+    if (!empty($iter['billing_note'])) { echo "<br>" . htmlspecialchars( $iter['billing_note'], ENT_NOQUOTES); }
     echo "</td>\n";
     echo "  <td class='srPhone'>" . htmlspecialchars( $iter['phone_home'], ENT_NOQUOTES) . "</td>\n"; //(CHEMED) Search by phone number
     echo "  <td class='srSS'>" . htmlspecialchars( $iter['ss'], ENT_NOQUOTES) . "</td>\n";

@@ -8,17 +8,11 @@ This file was generated on %date% at %time%
 The original location of this file is /home/duhlman/uml-generated-code/prescription.php
 **************************************************************************/
 
-//require_once("../../interface/globals.php");
-require_once("PhoneNumber.class.php");
-require_once("Address.class.php");
-//$GLOBALS['fileroot'] = "/var/www/openemr";
-//$GLOBALS['webroot'] = "/openemr";
 
 define ("TRANSMIT_PRINT",1);
 define ("TRANSMIT_EMAIL", 2);
 define ("TRANSMIT_FAX", 3);
 
-require_once("ORDataObject.class.php");
 /**
  * class Pharmacy
  *
@@ -30,16 +24,17 @@ class Pharmacy extends ORDataObject{
 	var $address;
 	var $transmit_method;
 	var $email;
-	var $transmit_method_array = array("","Print", "Email" ,"Fax");
+	var $transmit_method_array; //set in constructor
 
 	/**
 	 * Constructor sets all Prescription attributes to their default value
 	 */
-	function Pharmacy($id = "", $prefix = "")	{
+	function __construct($id = "", $prefix = "")	{
 		$this->id = $id;
 		$this->name = "";
 		$this->email = "";
 		$this->transmit_method = 1;
+		$this->transmit_method_array = array(xl("None Selected"), xl("Print"), xl("Email"), xl("Fax"));
 		$this->_table = "pharmacies";
 		$phone  = new PhoneNumber();
 		$phone->set_type(TYPE_WORK);
@@ -169,7 +164,7 @@ class Pharmacy extends ORDataObject{
 		$pharmacy_array = array();
 		$sql = "Select p.id, p.name, a.city, a.state from " . $this->_table ." as p INNER JOIN addresses as a on  p.id = a.foreign_id";
 		$res = sqlQ($sql);
-		while ($row = mysql_fetch_array($res) ) {
+		while ($row = sqlFetchArray($res) ) {
 				$d_string = $row['city'];
 				if (!empty($row['city']) && $row['state']) {
 					$d_string .= ", ";
@@ -185,17 +180,17 @@ class Pharmacy extends ORDataObject{
 			 $city= "";
 		}
 		else {
-			$city = " WHERE city = " . mysql_real_escape_string($foreign_id);
+			$city = " WHERE city = " . add_escape_custom($foreign_id);
 		}
 		$p = new Pharmacy();
 		$pharmacies = array();
-		$sql = "SELECT p.id, a.city FROM  " . $p->_table . " as p INNER JOIN addresses as a on p.id = a.foreign_id " .$city . " " . mysql_real_escape_string($sort);
+		$sql = "SELECT p.id, a.city FROM  " . $p->_table . " as p INNER JOIN addresses as a on p.id = a.foreign_id " .$city . " " . add_escape_custom($sort);
 
 		//echo $sql . "<bR />";
 		$results = sqlQ($sql);
 		//echo "sql: $sql";
 		//print_r($results);
-		while($row = mysql_fetch_array($results) ) {
+		while($row = sqlFetchArray($results) ) {
 				$pharmacies[] = new Pharmacy($row['id']);
 		}
 		return $pharmacies;

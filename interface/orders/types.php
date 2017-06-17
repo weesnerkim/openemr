@@ -1,14 +1,15 @@
 <?php
-// Copyright (C) 2010 Rod Roark <rod@sunsetsystems.com>
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * Copyright (C) 2010-2012 Rod Roark <rod@sunsetsystems.com>
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ */
 
 require_once("../globals.php");
 require_once("$srcdir/acl.inc");
-require_once("$srcdir/formdata.inc.php");
 
 // This script can be run either inside the OpenEMR frameset for order catalog
 // maintenance, or as a popup window for selecting an item to order.  In the
@@ -17,6 +18,7 @@ require_once("$srcdir/formdata.inc.php");
 
 $popup = empty($_GET['popup']) ? 0 : 1;
 $order = formData('order', 'G') + 0;
+$labid = formData('labid', 'G') + 0;
 
 // If Save was clicked, set the result, close the window and exit.
 //
@@ -26,12 +28,26 @@ if ($popup && $_POST['form_save']) {
     "procedure_type_id = '$form_order'");
   $name = addslashes($ptrow['name']);
 ?>
+<script type="text/javascript" src="<?php echo $webroot ?>/interface/main/tabs/js/include_opener.js"></script>
 <script language="JavaScript">
-if (opener.closed || ! opener.set_proc_type)
+if (opener.closed || ! opener.set_proc_type) {
  alert('<?php xl('The destination form was closed; I cannot act on your selection.','e'); ?>');
-else
+}
+else {
  opener.set_proc_type(<?php echo "$form_order, '$name'" ?>);
-window.close();
+<?php
+// This is to generate the "Questions at Order Entry" for the Procedure Order form.
+// GET parms needed for this are: formid, formseq.
+if (isset($_GET['formid'])) {
+  require_once("qoe.inc.php");
+  $qoe_init_javascript = '';
+  echo ' opener.set_proc_html("';
+  echo generate_qoe_html($form_order, intval($_GET['formid']), 0, intval($_GET['formseq']));
+  echo '", "' . $qoe_init_javascript .  '");' . "\n";
+}
+?>
+}
+window.close(); // comment out for debugging
 </script>
 <?php
   exit();
@@ -92,11 +108,11 @@ tr.oddrow {
 .col5 {width:10%}
 </style>
 
-<script src="../../library/js/jquery-1.2.2.min.js" type="text/javascript"></script>
+<script src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js" type="text/javascript"></script>
 <?php if ($popup) { ?>
 <script type="text/javascript" src="../../library/topdialog.js"></script>
 <?php } ?>
-<script type="text/javascript" src="../../library/dialog.js"></script>
+<script type="text/javascript" src="../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 
 <script language="JavaScript">
 
@@ -128,7 +144,7 @@ function nextOpen() {
    if (thisid > 0)
     toggle(thisid);
    else
-    $.getScript('types_ajax.php?id=' + thisid + '&order=<?php echo $order; ?>');
+    $.getScript('types_ajax.php?id=' + thisid + '&order=<?php echo $order; ?>' + '&labid=<?php echo $labid; ?>');
   }
   else {
    recolor();
@@ -160,7 +176,7 @@ function toggle(id) {
   td1.parent().after('<tr class="outertr"><td colspan="5" id="con' + id + '" style="padding:0">Loading...</td></tr>');
   td1.addClass('isExpanded');
   swapsign(td1, '+', '-');
-  $.getScript('types_ajax.php?id=' + id + '&order=<?php echo $order; ?>');
+  $.getScript('types_ajax.php?id=' + id + '&order=<?php echo $order; ?>' + '&labid=<?php echo $labid; ?>');
  }
 }
 
@@ -191,7 +207,7 @@ function refreshFamily(id, haskids) {
   }
  }
  if (haskids)
-  $.getScript('types_ajax.php?id=' + id + '&order=<?php echo $order; ?>');
+  $.getScript('types_ajax.php?id=' + id + '&order=<?php echo $order; ?>' + '&labid=<?php echo $labid; ?>');
  else
   recolor();
 }
@@ -225,7 +241,11 @@ function recolor() {
 
 <h3 style='margin-top:0'><?php xl('Types of Orders and Results','e') ?></h3>
 
-<form method='post' name='theform' action='types.php?popup=<?php echo $popup ?>&order=<?php echo $order ?>'>
+<form method='post' name='theform' action='types.php?popup=<?php echo $popup ?>&order=<?php
+echo $order;
+if (isset($_GET['formid' ])) echo '&formid='  . $_GET['formid'];
+if (isset($_GET['formseq'])) echo '&formseq=' . $_GET['formseq'];
+?>'>
 
 <table width='100%' cellspacing='0' cellpadding='0' border='0'>
  <tr class='head'>

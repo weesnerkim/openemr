@@ -1,5 +1,5 @@
 <?php
-// Copyright (C) 2010 Rod Roark <rod@sunsetsystems.com>
+// Copyright (C) 2010-2014 Rod Roark <rod@sunsetsystems.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -9,7 +9,6 @@
 require_once("../globals.php");
 require_once("$srcdir/acl.inc");
 require_once("$srcdir/options.inc.php");
-require_once("$srcdir/formdata.inc.php");
 
 $typeid = formData('typeid', 'R') + 0;
 $parent = formData('parent', 'R') + 0;
@@ -58,7 +57,8 @@ function recursiveDelete($typeid) {
 ?>
 <html>
 <head>
-<title><?php echo $typeid ? xl('Edit') : xl('Add New') ?> <?php xl('Order/Result Type','e'); ?></title>
+<script type="text/javascript" src="<?php echo $webroot ?>/interface/main/tabs/js/include_opener.js"></script>    
+<title><?php echo $typeid ? xlt('Edit') : xlt('Add New'); ?> <?php echo xlt('Order/Result Type'); ?></title>
 <link rel="stylesheet" href='<?php echo $css_header ?>' type='text/css'>
 
 <style>
@@ -81,8 +81,8 @@ td { font-size:10pt; }
 </style>
 
 <script type="text/javascript" src="../../library/topdialog.js"></script>
-<script type="text/javascript" src="../../library/dialog.js"></script>
-<script type="text/javascript" src="../../library/js/jquery-1.2.2.min.js"></script>
+<script type="text/javascript" src="../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
 
 <script language="JavaScript">
 
@@ -120,8 +120,10 @@ function proc_type_changed() {
  if (ix < 0) ix = 0;
  var ptval = pt.options[ix].value;
  var ptpfx = ptval.substring(0, 3);
- if (ptpfx == 'ord') $('.ordonly').show(); else $('.ordonly').hide();
- if (ptpfx == 'res'|| ptpfx == 'rec') $('.resonly').show(); else $('.resonly').hide();
+ $('.ordonly').hide();
+ $('.resonly').hide();
+ if (ptpfx == 'ord') $('.ordonly').show();
+ if (ptpfx == 'res'|| ptpfx == 'rec') $('.resonly').show();
 }
 
 $(document).ready(function() {
@@ -204,7 +206,7 @@ if ($typeid) {
 <table border='0' width='100%'>
 
  <tr>
-  <td width='1%' nowrap><b><?php xl('Procedure Type','e'); ?>:</b></td>
+  <td width='1%' nowrap><b><?php echo xlt('Procedure Type'); ?>:</b></td>
   <td>
 <?php
 echo generate_select_list('form_procedure_type', 'proc_type', $row['procedure_type'],
@@ -214,70 +216,80 @@ echo generate_select_list('form_procedure_type', 'proc_type', $row['procedure_ty
  </tr>
 
  <tr>
-  <td nowrap><b><?php xl('Name','e'); ?>:</b></td>
+  <td nowrap><b><?php echo xlt('Name'); ?>:</b></td>
   <td>
    <input type='text' size='40' name='form_name' maxlength='63'
     value='<?php echo htmlspecialchars($row['name'], ENT_QUOTES); ?>'
-    title='<?php xl('Your name for this category, procedure or result','e'); ?>'
+    title='<?php echo xlt('Your name for this category, procedure or result'); ?>'
     style='width:100%' class='inputtext' />
   </td>
  </tr>
 
  <tr>
-  <td nowrap><b><?php xl('Description','e'); ?>:</b></td>
+  <td nowrap><b><?php echo xlt('Description'); ?>:</b></td>
   <td>
    <input type='text' size='40' name='form_description' maxlength='255'
     value='<?php echo htmlspecialchars($row['description'], ENT_QUOTES); ?>'
-    title='<?php xl('Description of this procedure or result code','e'); ?>'
+    title='<?php echo xlt('Description of this procedure or result code'); ?>'
     style='width:100%' class='inputtext' />
   </td>
  </tr>
 
  <tr>
-  <td nowrap><b><?php xl('Sequence','e'); ?>:</b></td>
+  <td nowrap><b><?php echo xlt('Sequence'); ?>:</b></td>
   <td>
    <input type='text' size='4' name='form_seq' maxlength='11'
     value='<?php echo $row['seq'] + 0; ?>'
-    title='<?php xl('Relative ordering of this entity','e'); ?>'
+    title='<?php echo xla('Relative ordering of this entity'); ?>'
     class='inputtext' />
   </td>
  </tr>
 
  <tr class='ordonly'>
-  <td width='1%' nowrap><b><?php xl('Order From','e'); ?>:</b></td>
+  <td width='1%' nowrap><b><?php echo xlt('Order From'); ?>:</b></td>
   <td>
-<?php
-// Address book entries for procedure ordering.
-generate_form_field(array('data_type' => 14, 'field_id' => 'lab_id',
-  'list_id' => '', 'edit_options' => 'O',
-  'description' => xl('Address book entry for the company performing this procedure')),
-  $row['lab_id']);
+   <select name='form_lab_id' title='<?php echo xla('The entity performing this procedure'); ?>'>
+ <?php
+  $ppres = sqlStatement("SELECT ppid, name FROM procedure_providers " .
+    "ORDER BY name, ppid");
+  while ($pprow = sqlFetchArray($ppres)) {
+    echo "<option value='" . attr($pprow['ppid']) . "'";
+    if ($pprow['ppid'] == $row['lab_id']) echo " selected";
+    echo ">" . text($pprow['name']) . "</option>";
+  }
 ?>
+   </select>
   </td>
  </tr>
 
- <tr class='ordonly'>
-  <td nowrap><b><?php xl('Procedure Code','e'); ?>:</b></td>
+ <tr class='ordonly resonly'>
+  <td nowrap><b><?php echo xlt('Identifying Code'); ?>:</b></td>
   <td>
    <input type='text' size='40' name='form_procedure_code' maxlength='31'
     value='<?php echo htmlspecialchars($row['procedure_code'], ENT_QUOTES); ?>'
-    title='<?php xl('The vendor-specific code identifying this procedure or result','e'); ?>'
+    title='<?php echo xla('The vendor-specific code identifying this procedure or result'); ?>'
     style='width:100%' class='inputtext' />
   </td>
  </tr>
 
  <tr class='ordonly'>
-  <td nowrap><b><?php xl('Standard Code','e'); ?>:</b></td>
+  <td nowrap><b><?php echo xlt('Standard Code'); ?>:</b></td>
   <td>
+   <!--
    <input type='text' size='50' name='form_standard_code'
     value='<?php echo $row['standard_code'] ?>' onclick='sel_related("form_standard_code")'
-    title='<?php xl('Click to select an industry-standard code for this procedure','e'); ?>'
+    title='<?php echo xla('Click to select an industry-standard code for this procedure'); ?>'
     style='width:100%' readonly />
+   -->
+   <input type='text' size='50' name='form_standard_code'
+    value='<?php echo attr($row['standard_code']); ?>'
+    title='<?php echo xla('Enter the LOINC code for this procedure'); ?>'
+    style='width:100%' />
   </td>
  </tr>
 
  <tr class='ordonly'>
-  <td width='1%' nowrap><b><?php xl('Body Site','e'); ?>:</b></td>
+  <td width='1%' nowrap><b><?php echo xlt('Body Site'); ?>:</b></td>
   <td>
 <?php
 generate_form_field(array('data_type' => 1, 'field_id' => 'body_site',
@@ -288,7 +300,7 @@ generate_form_field(array('data_type' => 1, 'field_id' => 'body_site',
  </tr>
 
  <tr class='ordonly'>
-  <td width='1%' nowrap><b><?php xl('Specimen Type','e'); ?>:</b></td>
+  <td width='1%' nowrap><b><?php echo xlt('Specimen Type'); ?>:</b></td>
   <td>
 <?php
 generate_form_field(array('data_type' => 1, 'field_id' => 'specimen',
@@ -300,7 +312,7 @@ generate_form_field(array('data_type' => 1, 'field_id' => 'specimen',
  </tr>
 
  <tr class='ordonly'>
-  <td width='1%' nowrap><b><?php xl('Administer Via','e'); ?>:</b></td>
+  <td width='1%' nowrap><b><?php echo xlt('Administer Via'); ?>:</b></td>
   <td>
 <?php
 generate_form_field(array('data_type' => 1, 'field_id' => 'route_admin',
@@ -312,7 +324,7 @@ generate_form_field(array('data_type' => 1, 'field_id' => 'route_admin',
  </tr>
 
  <tr class='ordonly'>
-  <td width='1%' nowrap><b><?php xl('Laterality','e'); ?>:</b></td>
+  <td width='1%' nowrap><b><?php echo xlt('Laterality'); ?>:</b></td>
   <td>
 <?php
 generate_form_field(array('data_type' => 1, 'field_id' => 'laterality',
@@ -324,7 +336,7 @@ generate_form_field(array('data_type' => 1, 'field_id' => 'laterality',
  </tr>
 
  <tr class='resonly'>
-  <td width='1%' nowrap><b><?php xl('Default Units','e'); ?>:</b></td>
+  <td width='1%' nowrap><b><?php echo xlt('Default Units'); ?>:</b></td>
   <td>
 <?php
 generate_form_field(array('data_type' => 1, 'field_id' => 'units',
@@ -336,21 +348,21 @@ generate_form_field(array('data_type' => 1, 'field_id' => 'units',
  </tr>
 
  <tr class='resonly'>
-  <td nowrap><b><?php xl('Default Range','e'); ?>:</b></td>
+  <td nowrap><b><?php echo xlt('Default Range'); ?>:</b></td>
   <td>
    <input type='text' size='40' name='form_range' maxlength='255'
     value='<?php echo htmlspecialchars($row['range'], ENT_QUOTES); ?>'
-    title='<?php xl('Optional default range for manual entry of results','e'); ?>'
+    title='<?php echo xla('Optional default range for manual entry of results'); ?>'
     style='width:100%' class='inputtext' />
   </td>
  </tr>
 
  <tr class='resonly'>
-  <td nowrap><b><?php xl('Followup Services','e'); ?>:</b></td>
+  <td nowrap><b><?php echo xlt('Followup Services'); ?>:</b></td>
   <td>
    <input type='text' size='50' name='form_related_code'
     value='<?php echo $row['related_code'] ?>' onclick='sel_related("form_related_code")'
-    title='<?php xl('Click to select services to perform if this result is abnormal','e'); ?>'
+    title='<?php echo xla('Click to select services to perform if this result is abnormal'); ?>'
     style='width:100%' readonly />
   </td>
  </tr>
@@ -359,15 +371,15 @@ generate_form_field(array('data_type' => 1, 'field_id' => 'units',
 
 <br />
 
-<input type='submit' name='form_save' value=<?php xl('Save','e','\'','\''); ?> />
+<input type='submit' name='form_save' value='<?php echo xla('Save'); ?>' />
 
 <?php if ($typeid) { ?>
 &nbsp;
-<input type='submit' name='form_delete' value=<?php xl('Delete','e','\'','\''); ?> style='color:red' />
+<input type='submit' name='form_delete' value='<?php echo xla('Delete'); ?>' style='color:red' />
 <?php } ?>
 
 &nbsp;
-<input type='button' value=<?php xl('Cancel','e','\'','\''); ?> onclick='window.close()' />
+<input type='button' value='<?php echo xla('Cancel'); ?>' onclick='window.close()' />
 </p>
 
 </center>

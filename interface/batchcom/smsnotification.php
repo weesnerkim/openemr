@@ -2,7 +2,6 @@
 //INCLUDES, DO ANY ACTIONS, THEN GET OUR DATA
 include_once("../globals.php");
 include_once("$srcdir/registry.inc");
-include_once("$srcdir/sql.inc");
 include_once("../../library/acl.inc");
 include_once("batchcom.inc.php");
 
@@ -25,7 +24,7 @@ $message="Welcome to EMR Group";
 $type = "SMS";
 
 // process form
-if ($_POST['form_action']=='Save') 
+if ($_POST['form_action']=='Save')
 {
     //validation uses the functions in notification.inc.php
     //validate dates
@@ -36,7 +35,7 @@ if ($_POST['form_action']=='Save')
     if ($_POST['provider_name']=="") $form_err.=xl('Empty value in "Name of Provider"','','<br>');
     if ($_POST['message']=="") $form_err.=xl('Empty value in "SMS Text"','','<br>');
     //process sql
-    if (!$form_err) 
+    if (!$form_err)
     {
         $next_app_time = $_POST[hour].":".$_POST['min'];
         $sql_text=" ( `notification_id` , `sms_gateway_type` , `next_app_date` , `next_app_time` , `provider_name` , `message` , `email_sender` , `email_subject` , `type` ) ";
@@ -46,7 +45,7 @@ if ($_POST['form_action']=='Save')
         $id = sqlInsert($query);
         $sql_msg="ERROR!... in Update";
         if($id)    $sql_msg="SMS Notification Settings Updated Successfully";
-    } 
+    }
 }
 
 // fetch data from table
@@ -74,8 +73,6 @@ $min_array = array('00','05','10','15','20','25','30','35','40','45','50','55');
 <head>
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
 <link rel="stylesheet" href="batchcom.css" type="text/css">
-<script type="text/javascript" src="../../library/overlib_mini.js"></script>
-<script type="text/javascript" src="../../library/calendar.js"></script>
 
 
 </head>
@@ -105,7 +102,7 @@ $min_array = array('00','05','10','15','20','25','30','35','40','45','50','55');
             <?php }?>
             </SELECT>
         <br>
-        
+
         <?php xl('Name of Provider','e')?> :
         <INPUT TYPE="text" NAME="provider_name" size="40" value="<?php echo $provider_name?>">
         <br>

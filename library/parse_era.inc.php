@@ -278,7 +278,7 @@ function parse_era($filename, $cb) {
         }
         else if ($segid == 'NM1' && $seg[1] == 'TT' && $out['loopid'] == '2100') {
             $out['crossover']     = 1;//Claim automatic forward case.
-            
+
         }
         // 74 = Corrected Insured
         // TT = Crossover Carrier (Transfer To another payer)
@@ -352,9 +352,12 @@ function parse_era($filename, $cb) {
         $out['svc'][$i]['mod']  = substr($svc[1], 5);
       } else {
         $out['svc'][$i]['code'] = $svc[1];
-        $out['svc'][$i]['mod']  = $svc[2] ? $svc[2] : '';
+        $out['svc'][$i]['mod']  = $svc[2] ? $svc[2] . ':' : '';
+        $out['svc'][$i]['mod']  .= $svc[3] ? $svc[3] . ':' : '';
+        $out['svc'][$i]['mod']  .= $svc[4] ? $svc[4] . ':' : '';
+        $out['svc'][$i]['mod']  .= $svc[5] ? $svc[5] . ':' : '';
+        $out['svc'][$i]['mod'] = preg_replace('/:$/','',$out['svc'][$i]['mod']);
       }
-            // TBD: There may be up to 4 procedure modifiers in $svc[2] thru [5].
             $out['svc'][$i]['chg']  = $seg[2];
             $out['svc'][$i]['paid'] = $seg[3];
             $out['svc'][$i]['adj']  = array();
@@ -486,7 +489,7 @@ function parse_era_for_check($filename) {
             $out['check_amount'.$check_count] = trim($seg[2]);
             $out['check_date'.$check_count] = trim($seg[16]); // yyyymmdd
             // TBD: BPR04 is a payment method code.
-        
+
         }
         else if ($segid == 'N1' && $seg[1] == 'PE') {
             //if ($out['loopid'] != '1000A') return 'Unexpected N1|PE segment';

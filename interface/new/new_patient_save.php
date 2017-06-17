@@ -1,12 +1,11 @@
 <?php
 require_once("../globals.php");
-require_once("$srcdir/sql.inc");
 
 // Validation for non-unique external patient identifier.
 if (!empty($_POST["pubpid"])) {
   $form_pubpid = trim($_POST["pubpid"]);
   $result = sqlQuery("SELECT count(*) AS count FROM patient_data WHERE " .
-    "pubpid = '$form_pubpid'");
+    "pubpid = ?", array($form_pubpid));
   if ($result['count']) {
     // Error, not unique.
     require_once("new.php");
@@ -101,6 +100,7 @@ if ($_POST['form_create']) {
     "", // genericval1
     "", // genericname2
     "", // genericval2
+	"", //billing_note
     "", // phone_cell
     "", // hipaa_mail
     "", // hipaa_voice
@@ -121,8 +121,8 @@ if ($_POST['form_create']) {
   // Set referral source separately because we don't want it messed
   // with later by newPatientData().
   if ($refsource = trim($_POST["refsource"])) {
-    sqlQuery("UPDATE patient_data SET referral_source = '$refsource' " .
-      "WHERE pid = '$pid'");
+    sqlQuery("UPDATE patient_data SET referral_source = ? " .
+      "WHERE pid = ?", array($refsource, $pid));
   }
 
 }
@@ -132,14 +132,10 @@ if ($_POST['form_create']) {
 <script language="Javascript">
 <?php
 if ($alertmsg) {
-  echo "alert('$alertmsg');\n";
+  echo "alert('" . addslashes($alertmsg) . "');\n";
 }
-if ($GLOBALS['concurrent_layout']) {
   echo "window.location='$rootdir/patient_file/summary/demographics.php?" .
-    "set_pid=$pid&is_new=1';\n";
-} else {
-  echo "window.location='$rootdir/patient_file/patient_file.php?set_pid=$pid';\n";
-}
+    "set_pid=" . attr($pid) . "&is_new=1';\n";
 ?>
 </script>
 

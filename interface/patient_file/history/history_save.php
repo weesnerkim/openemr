@@ -1,12 +1,6 @@
 <?php
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
  include_once("../../globals.php");
  include_once("$srcdir/patient.inc");
@@ -15,14 +9,13 @@ $fake_register_globals=false;
  include_once("$srcdir/options.inc.php");
 
  // Check authorization.
- $thisauth = acl_check('patients', 'med');
- if ($thisauth) {
+ if (acl_check('patients','med')) {
   $tmp = getPatientData($pid, "squad");
   if ($tmp['squad'] && ! acl_check('squads', $tmp['squad']))
-   $thisauth = 0;
+   die(htmlspecialchars(xlt("Not authorized for this squad."),ENT_NOQUOTES));
  }
- if ($thisauth != 'write' && $thisauth != 'addonly')
-  die(htmlspecialchars(xl("Not authorized"),ENT_NOQUOTES));
+ if ( !acl_check('patients','med','',array('write','addonly') ))
+  die(htmlspecialchars(xlt("Not authorized"),ENT_NOQUOTES));
 
 foreach ($_POST as $key => $val) {
   if ($val == "YYYY-MM-DD") {
@@ -42,9 +35,5 @@ while ($frow = sqlFetchArray($fres)) {
 }
 updateHistoryData($pid, $newdata);
 
-if ($GLOBALS['concurrent_layout']) {
  include_once("history.php");
-} else {
- include_once("patient_history.php");
-}
 ?>

@@ -1,10 +1,4 @@
 <?php
-	require_once (dirname(__FILE__) ."/../sql.inc");
-        require_once (dirname(__FILE__) ."/../formdata.inc.php");
-	require_once("Patient.class.php");
-	require_once("Person.class.php");
-	require_once("Provider.class.php");
-	require_once("Pharmacy.class.php");
 
 /**
  * class ORDataObject
@@ -16,10 +10,10 @@ class ORDataObject {
 	var $_table;
 	var $_db;
 
-	function ORDataObject() {
-	  $this->_db = $GLOBALS['adodb']['db']; 	
+	function __construct() {
+	  $this->_db = $GLOBALS['adodb']['db'];
 	}
-	
+
 	function persist() {
 		$sql = "REPLACE INTO " . $_prefix . $this->_table . " SET ";
 		//echo "<br><br>";
@@ -40,7 +34,7 @@ class ORDataObject {
 					$val = strip_escape_custom($val);
 				        //DEBUG LINE - error_log("ORDataObject persist after strip: ".$val, 0);
 				}
-			    
+
 				if (in_array($field,$pkeys)  && empty($val)) {
 					$last_id = generate_id();
 					call_user_func(array(&$this,"set_".$field),$last_id);
@@ -49,7 +43,7 @@ class ORDataObject {
 
 				if (!empty($val)) {
 					//echo "s: $field to: $val <br>";
-					
+
                                         //modified 01-2010 by BGM to centralize to formdata.inc.php
 			                // have place several debug statements to allow standardized testing over next several months
 					$sql .= " `" . $field . "` = '" . add_escape_custom(strval($val)) ."',";
@@ -111,42 +105,44 @@ class ORDataObject {
 	 *
 	 * @param string $field_name name of the enumeration in this objects table
 	 * @param boolean $blank optional value to include a empty element at position 0, default is true
-	 * @return array array of values as name to index pairs found in the db enumeration of this field  
+	 * @return array array of values as name to index pairs found in the db enumeration of this field
 	 */
 	function _load_enum($field_name,$blank = true) {
-		if (!empty($GLOBALS['static']['enums'][$this->_table][$field_name]) 
+		if (!empty($GLOBALS['static']['enums'][$this->_table][$field_name])
 			&& is_array($GLOBALS['static']['enums'][$this->_table][$field_name])
 			&& !empty($this->_table)) 												{
-				
-			return $GLOBALS['static']['enums'][$this->_table][$field_name];		
+
+			return $GLOBALS['static']['enums'][$this->_table][$field_name];
 		}
 		else {
 			$cols = $this->_db->MetaColumns($this->_table);
 			if ($cols && !$cols->EOF) {
-				//why is there a foreach here? at some point later there will be a scheme to autoload all enums 
+				//why is there a foreach here? at some point later there will be a scheme to autoload all enums
 				//for an object rather than 1x1 manually as it is now
 				foreach($cols as $col) {
-	  		      if ($col->name == $field_name && substr($col->type,0,4) == "enum") {
-	  		        preg_match_all("|[\'](.*)[\']|U",$col->type,$enum_types);
-	  		        //position 1 is where preg_match puts the matches sans the delimiters
-	  		        $enum = $enum_types[1];
+	  		      if ($col->name == $field_name && $col->type == "enum") {
+                                for($idx=0;$idx<count($col->enums);$idx++)
+                                {
+                                    $col->enums[$idx]=str_replace("'","",$col->enums[$idx]);
+                                }
+	  		        $enum = $col->enums;
 	  		        //for future use
 	  		        //$enum[$col->name] = $enum_types[1];
 	  		      }
 			    }
 			   array_unshift($enum," ");
-			   
+
 			   //keep indexing consistent whether or not a blank is present
 			   if (!$blank) {
 			     unset($enum[0]);
 			   }
 			   $enum = array_flip($enum);
 			  $GLOBALS['static']['enums'][$this->_table][$field_name] = $enum;
-			}	
+			}
 			return $enum;
 		}
 	}
-	
+
 	function _utility_array($obj_ar,$reverse=false,$blank=true, $name_func="get_name", $value_func="get_id") {
 		$ar = array();
 		if ($blank) {
@@ -154,10 +150,10 @@ class ORDataObject {
 		}
 		if (!is_array($obj_ar)) return $ar;
 		foreach($obj_ar as $obj) {
-			$ar[$obj->$value_func()] = $obj->$name_func();	
+			$ar[$obj->$value_func()] = $obj->$name_func();
 		}
 		if ($reverse) {
-			$ar = array_flip($ar);	
+			$ar = array_flip($ar);
 		}
 		return $ar;
 	}

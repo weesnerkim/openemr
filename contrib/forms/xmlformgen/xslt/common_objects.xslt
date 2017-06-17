@@ -142,30 +142,30 @@ $table_name = ']]></xsl:text>
 </xsl:if>
 </xsl:template>
 <xsl:template match="acl">
+<xsl:if test="@table='patients'">
 <xsl:text disable-output-escaping="yes"><![CDATA[/* Check the access control lists to ensure permissions to this page */
-$thisauth = acl_check(']]></xsl:text>
+if (!acl_check(']]></xsl:text>
 <xsl:value-of select="@table" />
 <xsl:text disable-output-escaping="yes"><![CDATA[', ']]></xsl:text>
 <xsl:value-of select="./text()" />
-<xsl:text disable-output-escaping="yes"><![CDATA[');]]></xsl:text>
-<xsl:if test="@table='patients'">
-<xsl:text disable-output-escaping="yes"><![CDATA[
-if (!$thisauth) {
- die($form_name.': Access Denied.');
+<xsl:text disable-output-escaping="yes"><![CDATA[')) {
+ die(text($form_name).': '.xlt("Access Denied"));
 }
-/* perform a squad check for pages touching patients, if we're in 'athletic team' mode */
-if ($GLOBALS['athletic_team']!='false') {
-  $tmp = getPatientData($pid, 'squad');
-  if ($tmp['squad'] && ! acl_check('squads', $tmp['squad']))
-   $thisauth = 0;
+$thisauth_write_addonly=FALSE;
+if ( acl_check(']]></xsl:text>
+<xsl:value-of select="@table" />
+<xsl:text disable-output-escaping="yes"><![CDATA[',']]></xsl:text>
+<xsl:value-of select="./text()" />
+<xsl:text disable-output-escaping="yes"><![CDATA[','',array('write','addonly') )) {
+ $thisauth_write_addonly=TRUE;
 }
 ]]></xsl:text>
-</xsl:if>
 <xsl:if test="$page='new' or $page='view'">
 <xsl:text disable-output-escaping="yes"><![CDATA[
-if ($thisauth != 'write' && $thisauth != 'addonly')
-  die($form_name.': Adding is not authorized.');
+if (!$thisauth_write_addonly)
+  die(text($form_name).': '.xlt("Adding is not authorized"));
 ]]></xsl:text>
+</xsl:if>
 </xsl:if>
 </xsl:template>
 <!-- default layout object -->
@@ -202,7 +202,7 @@ while ($frow = sqlFetchArray($fres)) {
     $group_name = substr($this_group, 1);
     $last_group = $this_group;
     echo "<div><span class='sectionlabel'><input type='checkbox' id='form_cb_$group_seq' value='1' " .
-      "onclick='return divclick(this,\"$field_id\");'";
+      "data-section=\"$field_id\"";
     if (strcmp($check_first_section, 'true')) echo " checked='checked'";
 
     // Modified 6-09 by BM - Translate if applicable
@@ -226,7 +226,7 @@ while ($frow = sqlFetchArray($fres)) {
   if ($titlecols > 0) {
     end_cell();
     echo "<td colspan='$titlecols' valign='top'";
-    echo ($frow['uor'] == 2) ? " class='required'" : " class='label'";
+    echo ($frow['uor'] == 2) ? " class='required'" : " class='label_custom'";
     if ($cell_count == 2) echo " style='padding-left:10pt'";
     echo '>';
     $cell_count += $titlecols;
@@ -271,12 +271,12 @@ $cells_per_row=]]></xsl:text>
 </xsl:if>
 </xsl:template>
 <xsl:template match="manual" mode="head">
-<xsl:if test="$page='show' or $page='view' or $page='new'">
-<xsl:if test="//manual//field[@type='checkbox_list' or @type='exams' or @type='textbox' or @type='textarea' or @type='provider' or @type='date' or @type='textfield' or @type='dropdown_list']">
+<xsl:if test="$page='show' or $page='view' or $page='new' or $page='report' or $page='print'">
+<xsl:if test="//manual//field[@type='checkbox_list' or @type='checkbox_combo_list' or @type='exams' or @type='textbox' or @type='textarea' or @type='provider' or @type='date' or @type='textfield' or @type='dropdown_list']">
 <xsl:text disable-output-escaping="yes"><![CDATA[/* in order to use the layout engine's draw functions, we need a fake table of layout data. */
 $manual_layouts = array( 
 ]]></xsl:text>
-<xsl:for-each select="//manual//field[@type='checkbox_list' or @type='exams' or @type='textbox' or @type='textarea' or @type='provider' or @type='date' or @type='textfield' or @type='dropdown_list']">
+<xsl:for-each select="//manual//field[@type='checkbox_list' or @type='checkbox_combo_list' or @type='exams' or @type='textbox' or @type='textarea' or @type='provider' or @type='date' or @type='textfield' or @type='dropdown_list']">
 <xsl:text disable-output-escaping="yes"><![CDATA[ ']]></xsl:text>
 <xsl:value-of select="@name" />
 <xsl:text disable-output-escaping="yes"><![CDATA[' => 
@@ -286,6 +286,12 @@ $manual_layouts = array(
 <xsl:text disable-output-escaping="yes"><![CDATA[',
           'data_type' => '21',
           'fld_length' => '0',
+          'description' => ']]></xsl:text>
+</xsl:if>
+<xsl:if test="@type='checkbox_combo_list'">
+<xsl:text disable-output-escaping="yes"><![CDATA[',
+          'data_type' => '25',
+          'fld_length' => '140',
           'description' => ']]></xsl:text>
 </xsl:if>
 <xsl:if test="@type='exams'">

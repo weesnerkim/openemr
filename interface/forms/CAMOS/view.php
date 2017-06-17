@@ -3,12 +3,12 @@
 include_once("../../globals.php");
 include_once("../../../library/api.inc");
 formHeader("Form: CAMOS");
-$returnurl = $GLOBALS['concurrent_layout'] ? 'encounter_top.php' : 'patient_encounter.php';
+$returnurl = 'encounter_top.php';
 $textarea_rows = 22;
 $textarea_cols = 90;
 ?>
 <html><head>
-<link rel=stylesheet href="<?echo $css_header;?>" type="text/css">
+<link rel=stylesheet href="<?php echo $css_header;?>" type="text/css">
 <script type="text/javascript">
 function checkall(){
   var f = document.my_form;
@@ -68,12 +68,12 @@ echo "<a href='".$GLOBALS['webroot'] . "/interface/patient_file/encounter/$retur
 $pid = $GLOBALS['pid'];
 $encounter = $GLOBALS['encounter'];
 
-$query = "select t1.id, t1.content from form_CAMOS as t1 join forms as t2 " .
+$query = "select t1.id, t1.content from ".mitigateSqlTableUpperCase("form_CAMOS")." as t1 join forms as t2 " .
   "on (t1.id = t2.form_id) where t2.form_name like 'CAMOS%' " .
   "and t2.encounter like $encounter and t2.pid = $pid";
 
 $statement = sqlStatement($query);
-while ($result = sqlFetchArray($statement)) { 
+while ($result = sqlFetchArray($statement)) {
     print "<input type=button value='" . xl('Edit') . "' onClick='show_edit(\"id_textarea_".$result['id']."\")'>";
     print "<input type=checkbox name='ch_".$result['id']."'> ".$result['content']."<br/>\n";
     print "<div id=id_textarea_".$result['id']." style='display:none'>\n";

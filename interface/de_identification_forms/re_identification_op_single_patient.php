@@ -21,8 +21,6 @@ require_once("$srcdir/lists.inc");
 require_once("$srcdir/patient.inc");
 require_once("$srcdir/acl.inc");
 require_once("$srcdir/options.inc.php");
-include_once("../../library/sql.inc");
-require_once("$srcdir/formdata.inc.php");
 $query = "SELECT status FROM re_identification_status";
 $res = sqlStatement($query);
 if ($row = sqlFetchArray($res))
@@ -32,7 +30,7 @@ if ($row = sqlFetchArray($res))
 	*  0 - There is no Re Identification in progress. (start new Re Identification process)
 	*  1 - A Re Identification process is currently in progress.
 	*  2 - The Re Identification process completed and xls file is ready to download
-	*/  
+	*/
 }
 if($status == 0)
 {
@@ -46,7 +44,7 @@ if($status == 0)
 	href='<?php echo $GLOBALS['webroot'] ?>/library/dynarch_calendar.css'
 	type='text/css'>
 
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 
 <style type="text/css">
 .style1 {
@@ -105,7 +103,7 @@ system ($sh_cmd);
 	<tr>
 		<td>&nbsp;</td>
 		<td>&nbsp;</td>
-	</tr> 
+	</tr>
 	<tr>
 		<td>&nbsp;</td>
 		<td>&nbsp;</td>

@@ -1,10 +1,25 @@
 <?php
-// Copyright (C) 2009-2010 Rod Roark <rod@sunsetsystems.com>
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * This script upload image to file.
+ *
+ * Copyright (C) 2009-2010 Rod Roark <rod@sunsetsystems.com>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Rod Roark <rod@sunsetsystems.com>
+ * @author  Roberto Vasquez <robertogagliotta@gmail.com>
+ * @link    http://www.open-emr.org
+ */
 
 require_once("../globals.php");
 
@@ -17,6 +32,7 @@ $imagedir   = "$patientdir/demographics";
 <html>
 <head>
 <title>Upload Image</title>
+<script type="text/javascript" src="<?php echo $webroot ?>/interface/main/tabs/js/include_opener.js"></script>
 <link rel="stylesheet" href="<?php echo xl($css_header,'e');?>" type="text/css">
 </head>
 <body>
@@ -27,6 +43,7 @@ $imagedir   = "$patientdir/demographics";
   if ($_POST["form_submit"] || $_POST["form_delete"]) {
     if (!file_exists($patientdir)) mkdir($patientdir);
     if (!file_exists($imagedir  )) mkdir($imagedir  );
+    check_file_dir_name($what);
     $filename = "$imagedir/$what.jpg";
 
     if ($_POST["form_delete"]) {
@@ -66,7 +83,7 @@ $imagedir   = "$patientdir/demographics";
     if ($errmsg) {
       $errmsg = strtr($errmsg, "\r\n'", "   ");
       echo "window.alert('$errmsg')\n";
-      echo "window.back()\n";
+      echo "window.history.back()\n";
     } else {
       echo "opener.location.reload()\n";
       echo "window.close()\n";
@@ -83,7 +100,7 @@ $imagedir   = "$patientdir/demographics";
 
 </center>
 
-<form method="post" name="main" action="upload_dialog.php?patientid=<?php echo $patientid ?>&file=<?php echo $what ?>" enctype="multipart/form-data">
+<form method="post" name="main" action="upload_dialog.php?patientid=<?php echo attr($patientid) ?>&file=<?php echo attr($what) ?>" enctype="multipart/form-data">
 <input type="hidden" name="MAX_FILE_SIZE" value="4000000">
 
 <center>

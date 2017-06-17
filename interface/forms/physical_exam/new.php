@@ -15,7 +15,7 @@ if (! $encounter) { // comes from globals.php
  die("Internal error: we do not seem to be in an encounter!");
 }
 
-$returnurl = $GLOBALS['concurrent_layout'] ? 'encounter_top.php' : 'patient_encounter.php';
+$returnurl = 'encounter_top.php';
 
 function showExamLine($line_id, $description, &$linedbrow, $sysnamedisp) {
  $dres = sqlStatement("SELECT * FROM form_physical_exam_diagnoses " .
@@ -127,7 +127,7 @@ if ($formid) {
 <head>
 <?php html_header_show();?>
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
-<script type="text/javascript" src="../../../library/dialog.js"></script>
+<script type="text/javascript" src="../../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 <script language="JavaScript">
 
  function seldiag(selobj, line_id) {

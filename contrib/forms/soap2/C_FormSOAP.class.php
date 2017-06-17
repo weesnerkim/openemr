@@ -1,6 +1,5 @@
 <?php
 
-require_once ($GLOBALS['fileroot'] . "/library/classes/Controller.class.php");
 require_once ($GLOBALS['fileroot'] . "/library/forms.inc");
 require_once("FormSOAP.class.php");
 
@@ -8,8 +7,8 @@ class C_FormSOAP extends Controller {
 
   var $template_dir;
 
-  function C_FormSOAP($template_mod = "general") {
-    parent::Controller();
+  function __construct($template_mod = "general") {
+    parent::__construct();
     $this->template_mod = $template_mod;
     $this->template_dir = dirname(__FILE__) . "/templates/";
     $this->assign("FORM_ACTION", $GLOBALS['web_root']);

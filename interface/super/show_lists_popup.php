@@ -13,7 +13,7 @@ include_once("../globals.php");
 <title><?php xl('List lists','e'); ?></title>
 <link rel="stylesheet" href='<?php echo $css_header ?>' type='text/css'>
 
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery-1.2.2.min.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
 
 <style>
 h1 {
@@ -45,7 +45,7 @@ li {
 <ul>
 <?php
 $res = sqlStatement("SELECT * FROM list_options WHERE " .
-                    "list_id = 'lists' ORDER BY title");
+    "list_id = 'lists' AND activity = 1 ORDER BY title");
 while ($row = sqlFetchArray($res)) {
     echo "<li id='".$row['option_id']."' class='oneresult'>" . xl($row['title']) . "</li>";
 }

@@ -1,6 +1,5 @@
 <?php
 
-require_once("Tree.class.php");
 
 /**
  * class CategoryTree
@@ -12,9 +11,9 @@ class ConfigTree extends Tree {
 	/*
 	*	This just sits on top of the parent constructor, only a shell so that the _table var gets set
 	*/
-	function ConfigTree($root,$root_type = ROOT_TYPE_ID) {
+	function __construct($root,$root_type = ROOT_TYPE_ID) {
 		$this->_table = "config";
-		parent::Tree($root,$root_type);
+		parent::__construct($root,$root_type);
 	}
 }
 ?>

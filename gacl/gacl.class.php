@@ -34,8 +34,9 @@
 /*
  * Path to ADODB.
  */
+
 if ( !defined('ADODB_DIR') ) {
-	define('ADODB_DIR', dirname(__FILE__).'/adodb');
+	define('ADODB_DIR', dirname(__FILE__).'/../vendor/adodb/adodb-php');
 }
 
 //openemr configuration file - bm - 05-2009
@@ -70,7 +71,7 @@ class gacl {
 	var $_db_table_prefix = 'gacl_';
 
 	/** @var string The database type, based on available ADODB connectors - mysql, postgres7, sybase, oci8po See here for more: http://php.weblogs.com/adodb_manual#driverguide */
-	var $_db_type = 'mysql';
+	var $_db_type = 'mysqli';
 
 	/** @var string The database server */
 	var $_db_host = '';
@@ -114,7 +115,7 @@ class gacl {
 	 * Constructor
 	 * @param array An arry of options to oeverride the class defaults
 	 */
-	function gacl($options = NULL) {
+	function __construct($options = NULL) {
 	    
 		$available_options = array('db','debug','items_per_page','max_select_box_items','max_search_return_items','db_table_prefix','db_type','db_host','db_user','db_password','db_name','caching','force_cache_expire','cache_dir','cache_expire_time');
 
@@ -166,6 +167,10 @@ class gacl {
 			$this->db = ADONewConnection($this->_db_type);
 			//Use NUM for slight performance/memory reasons.
 			$this->db->SetFetchMode(ADODB_FETCH_NUM);
+
+			// Port to be used in connection
+			$this->db->port = $sqlconf["port"];
+
 			$this->db->PConnect($this->_db_host, $this->_db_user, $this->_db_password, $this->_db_name);
 
 		        // Modified 5/2009 by BM for UTF-8 project
@@ -176,6 +181,13 @@ class gacl {
 				}
 			}
 		        // ---------------------------------------
+
+			//Turn off STRICT SQL
+			$sql_strict_set_success = $this->db->Execute("SET sql_mode = ''");
+			if (!$sql_strict_set_success) {
+				error_log("Unable to set strict sql setting: ".$this->db->ErrorMsg(), 0);
+			}
+
 			
 		}
 		$this->db->debug = $this->_debug;
@@ -234,18 +246,21 @@ class gacl {
 	}
 
 	/**
-	* Wraps the actual acl_query() function.
+	* 
+        * Check if the current user has a given type or types of access to an access control object.
 	*
-	* It is simply here to return TRUE/FALSE accordingly.
-	* @param string The ACO section value
-	* @param string The ACO value
-	* @param string The ARO section value
-	* @param string The ARO section
-	* @param string The AXO section value (optional)
-	* @param string The AXO section value (optional)
-	* @param integer The group id of the ARO ??Mike?? (optional)
-	* @param integer The group id of the AXO ??Mike?? (optional)
-	* @return boolean TRUE if the check succeeds, false if not.
+        * Implemented as a wrapper of acl_query().
+	* This function exists simply to return TRUE/FALSE accordingly.
+        *
+	* @param string $aco_section_value The ACO section value
+	* @param string $aco_value The ACO value
+	* @param string $aro_section_value The ARO section value
+	* @param string $aro_value The ARO value
+	* @param string $axo_section_value The AXO section value (optional)
+	* @param string $axo_value The AXO section value (optional)
+	* @param integer $root_aro_group The group id of the ARO (optional)
+	* @param integer $root_axo_group The group id of the AXO (optional)
+	* @return boolean true if the check succeeds, false if not.
 	*/
 	function acl_check($aco_section_value, $aco_value, $aro_section_value, $aro_value, $axo_section_value=NULL, $axo_value=NULL, $root_aro_group=NULL, $root_axo_group=NULL) {
 		$acl_result = $this->acl_query($aco_section_value, $aco_value, $aro_section_value, $aro_value, $axo_section_value, $axo_value, $root_aro_group, $root_axo_group);
@@ -312,20 +327,22 @@ class gacl {
 
 	/**
 	* The Main function that does the actual ACL lookup.
+        *
 	* @param string The ACO section value
 	* @param string The ACO value
 	* @param string The ARO section value
-	* @param string The ARO section
+	* @param string The ARO value
 	* @param string The AXO section value (optional)
-	* @param string The AXO section value (optional)
+	* @param string The AXO value (optional)
 	* @param string The value of the ARO group (optional)
 	* @param string The value of the AXO group (optional)
 	* @param boolean Debug the operation if true (optional)
+        * @param boolean Option to return all applicable ACL's rather than just one. (optional) (Added by OpenEMR)
 	* @return array Returns as much information as possible about the ACL so other functions can trim it down and omit unwanted data.
 	*/
-	function acl_query($aco_section_value, $aco_value, $aro_section_value, $aro_value, $axo_section_value=NULL, $axo_value=NULL, $root_aro_group=NULL, $root_axo_group=NULL, $debug=NULL) {
+	function acl_query($aco_section_value, $aco_value, $aro_section_value, $aro_value, $axo_section_value=NULL, $axo_value=NULL, $root_aro_group=NULL, $root_axo_group=NULL, $debug=NULL, $return_all=FALSE) {
 				
-		$cache_id = 'acl_query_'.$aco_section_value.'-'.$aco_value.'-'.$aro_section_value.'-'.$aro_value.'-'.$axo_section_value.'-'.$axo_value.'-'.$root_aro_group.'-'.$root_axo_group.'-'.$debug;
+		$cache_id = 'acl_query_'.$aco_section_value.'-'.$aco_value.'-'.$aro_section_value.'-'.$aro_value.'-'.$axo_section_value.'-'.$axo_value.'-'.$root_aro_group.'-'.$root_axo_group.'-'.$debug.'-'.$return_all;
 
 		$retarr = $this->get_cache($cache_id);
 
@@ -351,7 +368,8 @@ class gacl {
 			 * This query is where all the magic happens.
 			 * The ordering is very important here, as well very tricky to get correct.
 			 * Currently there can be  duplicate ACLs, or ones that step on each other toes. In this case, the ACL that was last updated/created
-			 * is used.
+			 * is used; unless the $return_all parameter is set to TRUE, then will return the entire array of applicable ACL information (this
+                         * option was added by OpenEMR)
 			 *
 			 * This is probably where the most optimizations can be made.
 			 */
@@ -466,6 +484,8 @@ class gacl {
 			 * The ordering is always very tricky and makes all the difference in the world.
 			 * Order (ar.value IS NOT NULL) DESC should put ACLs given to specific AROs
 			 * ahead of any ACLs given to groups. This works well for exceptions to groups.
+                         * If the $return_all parameter is set to TRUE, then will return the entire
+                         * array of applicable ACL information (this option was added by OpenEMR)
 			 */
 
 			$order_by[] = 'a.updated_date DESC';
@@ -474,35 +494,59 @@ class gacl {
 					ORDER BY	'. implode (',', $order_by) . '
 					';
 
-			// we are only interested in the first row
-			$rs = $this->db->SelectLimit($query, 1);
+			// we are only interested in the first row unless $return_all is set
+                        if ($return_all) {
+                                $rs = $this->db->Execute($query);
+                        }
+                        else {
+			        $rs = $this->db->SelectLimit($query, 1);
+                        }
 
 			if (!is_object($rs)) {
 				$this->debug_db('acl_query');
 				return FALSE;
 			}
 
-			$row =& $rs->FetchRow();
+                        if ($return_all) {
+                                while ($arr = $rs->FetchRow()) {
+                                        $row[] = $arr;
+                                }
+                        }
+                        else {
+			        $row = $rs->FetchRow();
+                        }
+
 
 			/*
 			 * Return ACL ID. This is the key to "hooking" extras like pricing assigned to ACLs etc... Very useful.
 			 */
-			if (is_array($row)) {
-				// Permission granted?
-				// This below oneliner is very confusing.
-				//$allow = (isset($row[1]) AND $row[1] == 1);
+			if (isset($row) && is_array($row)) {
 
-				//Prefer this.
-				if ( isset($row[1]) AND $row[1] == 1 ) {
-					$allow = TRUE;
-				} else {
+                                if ($return_all) {
+                                        foreach ($row as $single_row) {
+						$allow = FALSE;
+                                                if ( isset($single_row[1]) AND $single_row[1] == 1 ) {
+                                                        $allow = TRUE;
+                                                }
+                                                $retarr[] = array('acl_id' => &$single_row[0], 'return_value' => &$single_row[2], 'allow' => $allow);
+                                        }
+                                }
+                                else {
 					$allow = FALSE;
-				}
-
-				$retarr = array('acl_id' => &$row[0], 'return_value' => &$row[2], 'allow' => $allow);
+				        if ( isset($row[1]) AND $row[1] == 1 ) {
+					        $allow = TRUE;
+				        }
+				        $retarr = array('acl_id' => &$row[0], 'return_value' => &$row[2], 'allow' => $allow);
+                                }
 			} else {
-				// Permission denied.
-				$retarr = array('acl_id' => NULL, 'return_value' => NULL, 'allow' => FALSE);
+                                if ($return_all) {
+			                // Permission denied.
+			                $retarr[] = array('acl_id' => NULL, 'return_value' => NULL, 'allow' => FALSE);
+                                }
+                                else {
+                                        // Permission denied.
+                                        $retarr = array('acl_id' => NULL, 'return_value' => NULL, 'allow' => FALSE);
+                                }
 			}
 
 			/*
@@ -516,7 +560,15 @@ class gacl {
 			$this->put_cache($retarr, $cache_id);
 		}
 
-		$this->debug_text("<b>acl_query():</b> ACO Section: $aco_section_value ACO Value: $aco_value ARO Section: $aro_section_value ARO Value $aro_value ACL ID: ". $retarr['acl_id'] .' Result: '. $retarr['allow']);
+		if ($return_all)
+		{
+			$this->debug_text("<b>acl_query():</b> ACO Section: $aco_section_value ACO Value: $aco_value ARO Section: $aro_section_value ARO Value $aro_value ACL ID: OMITTED due to return_all");
+		}
+		else
+		{
+			$this->debug_text("<b>acl_query():</b> ACO Section: $aco_section_value ACO Value: $aco_value ARO Section: $aro_section_value ARO Value $aro_value ACL ID: ". $retarr['acl_id'] .' Result: '. $retarr['allow']);
+		}
+	
 		return $retarr;
 	}
 

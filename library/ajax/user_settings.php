@@ -1,5 +1,5 @@
 <?php
-// Copyright (C) 2010 Brady Miller <brady@sparmy.com>
+// Copyright (C) 2010 Brady Miller <brady.g.miller@gmail.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -11,13 +11,7 @@
 // settings
 //
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once(dirname(__FILE__) . "/../../interface/globals.php");
 require_once(dirname(__FILE__) . "/../user.inc");
@@ -29,5 +23,10 @@ if (( $_POST['mode'] == 1 || $_POST['mode'] == 0 ) && ( substr($_POST['target'],
   //set the user setting
   setUserSetting($_POST['target'], $_POST['mode']);
 
+}
+
+//mdsupport : Generic user setting
+if ((isset($_POST['lab'])) && (isset($_POST['val']))) {
+	setUserSetting($_POST['lab'], $_POST['val']);
 }
 ?>

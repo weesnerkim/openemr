@@ -1,15 +1,14 @@
 <?php
-// Copyright (C) 2008-2010 Rod Roark <rod@sunsetsystems.com>
+// Copyright (C) 2008-2016 Rod Roark <rod@sunsetsystems.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
+use OpenEMR\Core\Header;
 require_once("../globals.php");
 require_once("../../custom/code_types.inc.php");
-require_once("$srcdir/sql.inc");
-require_once("$srcdir/formatting.inc.php");
 
 // Format dollars for display.
 //
@@ -26,7 +25,9 @@ if (empty($_REQUEST['include_uncat']))
 ?>
 <html>
 <head>
-<?php html_header_show(); ?>
+
+<?php Header::setupHeader(['datetime-picker', 'report-helper']); ?>
+
 <style type="text/css">
 
 /* specifically include & exclude from printing */
@@ -51,11 +52,27 @@ if (empty($_REQUEST['include_uncat']))
         display: none;
     }
 }
-</style>
-<title><?php xl('Services by Category','e'); ?></title>
-<link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
 
-<script type="text/javascript" src="../../library/js/jquery.1.3.2.js"></script>
+table.mymaintable, table.mymaintable td, table.mymaintable th {
+ border: 1px solid #aaaaaa;
+ border-collapse: collapse;
+}
+table.mymaintable td, table.mymaintable th {
+ padding: 1pt 4pt 1pt 4pt;
+}
+</style>
+
+<title><?php xl('Services by Category','e'); ?></title>
+
+<script language="JavaScript">
+
+ $(document).ready(function() {
+  oeFixedHeaderSetup(document.getElementById('mymaintable'));
+  var win = top.printLogSetup ? top : opener.top;
+  win.printLogSetup(document.getElementById('printbutton'));
+ });
+
+</script>
 
 </head>
 
@@ -77,7 +94,7 @@ if (empty($_REQUEST['include_uncat']))
 	<table class='text'>
 		<tr>
 			<td>
-			   <select name='filter'>
+			   <select name='filter' class='form-control'>
 				<option value='0'><?php xl('All','e'); ?></option>
 			<?php
 			foreach ($code_types as $key => $value) {
@@ -89,8 +106,10 @@ if (empty($_REQUEST['include_uncat']))
 			   </select>
 			</td>
 			<td>
-			   <input type='checkbox' name='include_uncat' value='1'<?php if (!empty($_REQUEST['include_uncat'])) echo " checked"; ?> />
-			   <?php xl('Include Uncategorized','e'); ?>
+        <div class="checkbox">
+			    <label><input type='checkbox' name='include_uncat' value='1'<?php if (!empty($_REQUEST['include_uncat'])) echo " checked"; ?> />
+			    <?php xl('Include Uncategorized','e'); ?></label>
+        </div>
 			</td>
 		</tr>
 	</table>
@@ -102,20 +121,17 @@ if (empty($_REQUEST['include_uncat']))
 	<table style='border-left:1px solid; width:100%; height:100%' >
 		<tr>
 			<td>
-				<div style='margin-left:15px'>
-					<a href='#' class='css_button' onclick='$("#form_refresh").attr("value","true"); $("#theform").submit();'>
-					<span>
-						<?php xl('Submit','e'); ?>
-					</span>
-					</a>
-
-					<?php if ($_POST['form_refresh']) { ?>
-					<a href='#' class='css_button' onclick='window.print()'>
-						<span>
-							<?php xl('Print','e'); ?>
-						</span>
-					</a>
-					<?php } ?>
+				<div class="text-center">
+          <div class="btn-group" role="group">
+					  <a href='#' class='btn btn-default btn-save' onclick='$("#form_refresh").attr("value","true"); $("#theform").submit();'>
+						  <?php echo xlt('Submit'); ?>
+					  </a>
+					  <?php if ($_POST['form_refresh']) { ?>
+					    <a href='#' class='btn btn-default btn-print' id='printbutton'>
+							  <?php echo xlt('Print'); ?>
+					    </a>
+					  <?php } ?>
+          </div>
 				</div>
 			</td>
 		</tr>
@@ -125,10 +141,14 @@ if (empty($_REQUEST['include_uncat']))
 </table>
 </div> <!-- end of parameters -->
 
-<div id="report_results">
-<?php if ($_POST['form_submit']) { ?>
+<?php
+    if ($_POST['form_refresh']) {
+?>
 
-<table border='0' cellpadding='1' cellspacing='2' width='98%'>
+<div id="report_results">
+
+
+<table width='98%' id='mymaintable' class='mymaintable'>
  <thead style='display:table-header-group'>
   <tr bgcolor="#dddddd">
    <th class='bold'><?php xl('Category'   ,'e'); ?></th>
@@ -142,7 +162,7 @@ if (empty($_REQUEST['include_uncat']))
 <?php } ?>
 <?php
 $pres = sqlStatement("SELECT title FROM list_options " .
-		     "WHERE list_id = 'pricelevel' ORDER BY seq");
+		     "WHERE list_id = 'pricelevel' AND activity = 1 ORDER BY seq");
 while ($prow = sqlFetchArray($pres)) {
   // Added 5-09 by BM - Translate label if applicable
   echo "   <th class='bold' align='right' nowrap>" . xl_list_label($prow['title']) . "</th>\n";
@@ -154,7 +174,7 @@ while ($prow = sqlFetchArray($pres)) {
 <?php
 $res = sqlStatement("SELECT c.*, lo.title FROM codes AS c " .
   "LEFT OUTER JOIN list_options AS lo ON lo.list_id = 'superbill' " .
-  "AND lo.option_id = c.superbill " .
+  "AND lo.option_id = c.superbill AND lo.activity = 1 " .
   "WHERE $where ORDER BY lo.title, c.code_type, c.code, c.modifier");
 
 $last_category = '';
@@ -200,7 +220,7 @@ while ($row = sqlFetchArray($res)) {
     "FROM list_options AS lo LEFT OUTER JOIN prices AS p ON " .
     "p.pr_id = '" . $row['id'] . "' AND p.pr_selector = '' " .
     "AND p.pr_level = lo.option_id " .
-    "WHERE list_id = 'pricelevel' ORDER BY lo.seq");
+    "WHERE lo.list_id = 'pricelevel' AND lo.activity = 1 ORDER BY lo.seq");
   while ($prow = sqlFetchArray($pres)) {
     echo "   <td class='text' align='right'>" . bucks($prow['pr_price']) . "</td>\n";
   }

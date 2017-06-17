@@ -61,7 +61,7 @@ if ($_POST['bn_save']) {
     $field_id  = $frow['field_id'];
     $value = get_layout_form_value($frow);
     if ($sets) $sets .= ", ";
-    $sets .= "$field_id = '$value'";
+    $sets .= "$field_id = '" . add_escape_custom($value) . "'";
   }
 
   if ($formid) {
@@ -96,7 +96,7 @@ if ($formid) {
 <html>
 <head>
 <?php html_header_show();?>
-<link rel=stylesheet href="<?echo $css_header;?>" type="text/css">
+<link rel=stylesheet href="<?php echo $css_header;?>" type="text/css">
 <style>
 
 td, input, select, textarea {
@@ -114,7 +114,7 @@ div.section {
 
 </style>
 
-<script type="text/javascript" src="../../../library/dialog.js"></script>
+<script type="text/javascript" src="../../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 
 <script language="JavaScript">
 

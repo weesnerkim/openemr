@@ -4,13 +4,7 @@
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../../globals.php");
 require_once("$srcdir/pnotes.inc");
@@ -18,18 +12,33 @@ require_once("$srcdir/patient.inc");
 require_once("$srcdir/acl.inc");
 require_once("$srcdir/log.inc");
 require_once("$srcdir/options.inc.php");
-require_once("$srcdir/classes/Document.class.php");
 require_once("$srcdir/gprelations.inc.php");
 
-if ($GLOBALS['concurrent_layout'] && $_GET['set_pid']) {
+if ($_GET['set_pid']) {
     require_once("$srcdir/pid.inc");
     setpid($_GET['set_pid']);
 }
+
+// form parameter docid can be passed to restrict the display to a document.
+$docid = empty($_REQUEST['docid']) ? 0 : intval($_REQUEST['docid']);
+
+// form parameter orderid can be passed to restrict the display to a procedure order.
+$orderid = empty($_REQUEST['orderid']) ? 0 : intval($_REQUEST['orderid']);
+
+$patient_id = $pid;
+if ($docid) {
+  $row = sqlQuery("SELECT foreign_id FROM documents WHERE id = ?", array($docid));
+  $patient_id = intval($row['foreign_id']);
+}
+else if ($orderid) {
+  $row = sqlQuery("SELECT patient_id FROM procedure_order WHERE procedure_order_id = ?", array($orderid));
+  $patient_id = intval($row['patient_id']);
+}
+
 // Check authorization.
-$thisauth = acl_check('patients', 'notes');
-if ($thisauth != 'write' && $thisauth != 'addonly')
+if (!acl_check('patients','notes','',array('write','addonly') ))
     die(htmlspecialchars( xl('Not authorized'), ENT_NOQUOTES));
-$tmp = getPatientData($pid, "squad");
+$tmp = getPatientData($patient_id, "squad");
 if ($tmp['squad'] && ! acl_check('squads', $tmp['squad']))
     die(htmlspecialchars( xl('Not authorized for this squad.'), ENT_NOQUOTES));
 
@@ -58,9 +67,6 @@ else {
     $form_active = $form_inactive = '1';
 }
 
-// form parameter docid can be passed to restrict the display to a document.
-$docid = empty($_REQUEST['docid']) ? 0 : 0 + $_REQUEST['docid'];
-
 // this code handles changing the state of activity tags when the user updates
 // them through the interface
 if (isset($mode)) {
@@ -76,6 +82,9 @@ if (isset($mode)) {
         if ($docid) {
           setGpRelation(1, $docid, 6, $id, !empty($_POST["lnk$id"]));
         }
+        if ($orderid) {
+          setGpRelation(2, $orderid, 6, $id, !empty($_POST["lnk$id"]));
+        }
       }
     }
   }
@@ -86,9 +95,16 @@ if (isset($mode)) {
       $noteid = '';
     }
     else {
-      addPnote($pid, $note, $userauthorized, '1', $_POST['form_note_type'],
+      $noteid = addPnote($patient_id, $note, $userauthorized, '1', $_POST['form_note_type'],
         $_POST['assigned_to']);
     }
+    if ($docid) {
+      setGpRelation(1, $docid, 6, $noteid);
+    }
+    if ($orderid) {
+      setGpRelation(2, $orderid, 6, $noteid);
+    }
+    $noteid = '';
   }
   elseif ($mode == "delete") {
     if ($noteid) {
@@ -114,13 +130,12 @@ $ures = sqlStatement("SELECT username, fname, lname FROM users " .
  "( info IS NULL OR info NOT LIKE '%Inactive%' ) " .
  "ORDER BY lname, fname");
 
-$pres = sqlQuery("SELECT lname, fname " .
- "FROM patient_data WHERE pid = ?", array($pid) );
+$pres = getPatientData($patient_id, "lname, fname");
 $patientname = $pres['lname'] . ", " . $pres['fname'];
 
 //retrieve all notes
 $result = getPnotesByDate("", $active, 'id,date,body,user,activity,title,assigned_to',
-  $pid, $N, $offset);
+  $patient_id, $N, $offset);
 ?>
 
 <html>
@@ -130,10 +145,10 @@ $result = getPnotesByDate("", $active, 'id,date,body,user,activity,title,assigne
 <link rel='stylesheet' href="<?php echo $css_header;?>" type="text/css">
 
 <!-- supporting javascript code -->
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
 <link rel="stylesheet" type="text/css" href="../../../library/js/fancybox/jquery.fancybox-1.2.6.css" media="screen" />
-<script type="text/javascript" src="../../../library/dialog.js"></script>
-<script type="text/javascript" src="../../../library/js/jquery.1.3.2.js"></script>
+<script type="text/javascript" src="../../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-3-2/index.js"></script>
 <script type="text/javascript" src="../../../library/js/common.js"></script>
 <script type="text/javascript" src="../../../library/js/fancybox/jquery.fancybox-1.2.6.js"></script>
 <script type="text/javascript">
@@ -147,16 +162,31 @@ document.forms[0].submit();
 
 <div id="pnotes"> <!-- large outer DIV -->
 
-<form border='0' method='post' name='new_note' id="new_note" target="_parent" action='pnotes_full.php?docid=<?php echo htmlspecialchars( $docid, ENT_QUOTES); ?>'>
+<?php
+$title_docname = "";
+if ($docid) {
+  $title_docname .= " " . xl("linked to document") . " ";
+  $d = new Document($docid);
+  $title_docname .= $d->get_url_file();
+}
+if ($orderid) {
+  $title_docname .= " " . xl("linked to procedure order") . " $orderid";
+}
+
+$urlparms = "docid=$docid&orderid=$orderid";
+?>
+
+<form border='0' method='post' name='new_note' id="new_note" target="_parent"
+ action='pnotes_full.php?<?php echo $urlparms; ?>'>
 
     <div>
         <div style='float:left; margin-right: 5px'>
-            <span class="title"><?php echo htmlspecialchars( xl('Patient Note'), ENT_NOQUOTES); ?></span>
+            <span class="title"><?php echo xlt('Patient Note') . $title_docname; ?></span>
         </div>
         <div>
             <?php if ($noteid) { ?>
             <!-- existing note -->
-            <a href="#" class="css_button" id="printnote"><span><?php echo htmlspecialchars( xl('Print'), ENT_NOQUOTES); ?></span></a>
+            <a href="#" class="css_button" id="printnote"><span><?php echo xlt('View Printable Version'); ?></span></a>
             <?php } ?>
             <a class="css_button large_button" id='cancel' href='javascript:;'>
             <span class='css_button_span large_button_span'><?php echo htmlspecialchars( xl('Cancel'), ENT_NOQUOTES);?></span>
@@ -166,14 +196,6 @@ document.forms[0].submit();
 
     <br/>
 
-<?php
-$title_docname = "";
-if ($docid) {
-  $title_docname = " " . xl("linked to document") . " ";
-  $d = new Document($docid);
-  $title_docname .= $d->get_url_file();
-}
-?>
 <input type='hidden' name='mode' id="mode" value="new">
 <input type='hidden' name='trigger' id="trigger" value="add">
 <input type='hidden' name='offset' id="offset" value="<?php echo $offset ?>">
@@ -187,7 +209,7 @@ if ($docid) {
     <?php
      if ($noteid) {
        // Modified 6/2009 by BM to incorporate the patient notes into the list_options listings
-       echo htmlspecialchars( xl('Amend Existing Note'), ENT_NOQUOTES) . 
+       echo htmlspecialchars( xl('Amend Existing Note'), ENT_NOQUOTES) .
          "<b> &quot;" . generate_display_field(array('data_type'=>'1','list_id'=>'note_type'), $title) . "&quot;</b>\n";
      } else {
        echo htmlspecialchars( xl('Add New Note'), ENT_NOQUOTES) . "\n";
@@ -207,7 +229,6 @@ if ($docid) {
    &nbsp; &nbsp;
    <b><?php echo htmlspecialchars( xl('To'), ENT_NOQUOTES); ?>:</b>
    <select name='assigned_to'>
-    <option value=''>** <?php echo htmlspecialchars( xl('Close'), ENT_NOQUOTES); ?> **</option>
 <?php
  while ($urow = sqlFetchArray($ures)) {
   echo "    <option value='" . htmlspecialchars( $urow['username'], ENT_QUOTES) . "'";
@@ -217,6 +238,7 @@ if ($docid) {
   echo "</option>\n";
  }
 ?>
+   <option value=''><?php echo htmlspecialchars( xl('Mark Note as Completed'), ENT_NOQUOTES); ?></option>
    </select>
   </td>
  </tr>
@@ -225,7 +247,7 @@ if ($docid) {
 <?php
 if ($noteid) {
     $body = $prow['body'];
-    $body = preg_replace(array('/(\sto\s)-patient-(\))/','/(:\d{2}\s\()'.$pid.'(\sto\s)/'),'${1}'.$patientname.'${2}',$body);
+    $body = preg_replace(array('/(\sto\s)-patient-(\))/', '/(:\d{2}\s\()' . $patient_id . '(\sto\s)/'), '${1}' . $patientname . '${2}', $body);
     $body = nl2br(htmlspecialchars( $body, ENT_NOQUOTES));
     echo "<div class='text'>".$body."</div>";
 }
@@ -247,7 +269,7 @@ if ($noteid) {
 <br>
 </form>
 <form border='0' method='post' name='update_activity' id='update_activity'
- action="pnotes_full.php?docid=<?php echo htmlspecialchars( $docid, ENT_QUOTES); ?>">
+ action="pnotes_full.php?<?php echo $urlparms; ?>">
 
 <!-- start of previous notes DIV -->
 <div class=pat_notes>
@@ -264,7 +286,7 @@ if ($noteid) {
 <?php
 if ($offset > ($N-1)) {
   echo "   <a class='link' href='pnotes_full.php" .
-    "?docid=" . htmlspecialchars( $docid, ENT_QUOTES) .
+    "?$urlparms" .
     "&form_active=" . htmlspecialchars( $form_active, ENT_QUOTES) .
     "&form_inactive=" . htmlspecialchars( $form_inactive, ENT_QUOTES) .
     "&form_doc_only=" . htmlspecialchars( $form_doc_only, ENT_QUOTES) .
@@ -277,7 +299,7 @@ if ($offset > ($N-1)) {
 <?php
 if ($result_count == $N) {
   echo "   <a class='link' href='pnotes_full.php" .
-    "?docid=" . htmlspecialchars( $docid, ENT_QUOTES) .
+    "?$urlparms" .
     "&form_active=" . htmlspecialchars( $form_active, ENT_QUOTES) .
     "&form_inactive=" . htmlspecialchars( $form_inactive, ENT_QUOTES) .
     "&form_doc_only=" . htmlspecialchars( $form_doc_only, ENT_QUOTES) .
@@ -294,11 +316,10 @@ if ($result_count == $N) {
 <script language='JavaScript'>
 
 <?php
-if ($GLOBALS['concurrent_layout'] && $_GET['set_pid']) {
-  $ndata = getPatientData($pid, "fname, lname, pubpid");
+if ($_GET['set_pid']) {
+  $ndata = getPatientData($patient_id, "fname, lname, pubpid");
 ?>
- parent.left_nav.setPatient(<?php echo "'" . htmlspecialchars( $ndata['fname']." ".$ndata['lname'], ENT_QUOTES) . "',$pid,'" . htmlspecialchars( $ndata['pubpid'], ENT_QUOTES) . "',window.name"; ?>);
- parent.left_nav.setRadio(window.name, 'pno');
+ parent.left_nav.setPatient(<?php echo "'" . addslashes($ndata['fname']." ".$ndata['lname']) . "'," . addslashes($patient_id) . ",'" . addslashes($ndata['pubpid']) . "',window.name"; ?>);
 <?php
 }
 
@@ -311,7 +332,7 @@ if ($noteid /* && $title == 'New Document' */ ) {
     $docid = $matches[1];
     $docname = $matches[2];
 ?>
- window.open('../../../controller.php?document&retrieve&patient_id=<?php echo htmlspecialchars( $pid, ENT_QUOTES) ?>&document_id=<?php echo htmlspecialchars( $docid, ENT_QUOTES) ?>&<?php echo htmlspecialchars( $docname, ENT_QUOTES)?>&as_file=true',
+ window.open('../../../controller.php?document&retrieve&patient_id=<?php echo htmlspecialchars( $patient_id, ENT_QUOTES) ?>&document_id=<?php echo htmlspecialchars( $docid, ENT_QUOTES) ?>&<?php echo htmlspecialchars( $docname, ENT_QUOTES)?>&as_file=true',
   '_blank', 'resizable=1,scrollbars=1,width=600,height=500');
 <?php
   }

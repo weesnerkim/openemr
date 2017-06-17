@@ -1,18 +1,12 @@
 <?php
-// Copyright (C) 2008-2010 Rod Roark <rod@sunsetsystems.com>
+// Copyright (C) 2008-2015 Rod Roark <rod@sunsetsystems.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 include_once("../../globals.php");
 require_once("$srcdir/transactions.inc");
@@ -87,6 +81,9 @@ if ($patient_id) {
   $patient_age = '';
 }
 
+if (empty($trow['refer_from'])) $trow['refer_from'] = 0;
+if (empty($trow['refer_to'  ])) $trow['refer_to'  ] = 0;
+
 $frrow = sqlQuery("SELECT * FROM users WHERE id = ?", array($trow['refer_from']) );
 if (empty($frrow)) $frrow = array();
 
@@ -134,7 +131,7 @@ $s = str_replace("{ref_pid}"         , $patient_id            , $s);
 $s = str_replace("{pt_age}"          , $patient_age           , $s);
 
 $fres = sqlStatement("SELECT * FROM layout_options " .
-  "WHERE form_id = 'REF' ORDER BY group_name, seq");
+  "WHERE form_id = 'LBTref' ORDER BY group_name, seq");
 while ($frow = sqlFetchArray($fres)) {
   $data_type = $frow['data_type'];
   $field_id  = $frow['field_id'];
@@ -149,7 +146,7 @@ foreach ($patdata as $key => $value) {
    $s = str_replace("{pt_$key}", generate_display_field(array('data_type'=>'1','list_id'=>'sex'), $value), $s);
   }
   else {
-   $s = str_replace("{pt_$key}", $value, $s);   
+   $s = str_replace("{pt_$key}", $value, $s);
   }
 }
 

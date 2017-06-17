@@ -44,6 +44,7 @@ define('_EVENT_HIDDEN',       -1);
 define('NO_REPEAT',            0);
 define('REPEAT',               1);
 define('REPEAT_ON',            2);
+define('REPEAT_DAYS', 3);
 // $event_repeat_freq
 define('REPEAT_EVERY',         1);
 define('REPEAT_EVERY_OTHER',   2);
@@ -84,6 +85,8 @@ define('SHARING_GLOBAL',       3);
 // $cat_type
 define('TYPE_ON_PATIENT',        0);
 define('TYPE_ON_PROVIDER',        1);
+define('TYPE_ON_CLINIC',        2);
+define('TYPE_ON_THERAPY_GROUP', 3);
 // admin defines
 define('_ADMIN_ACTION_APPROVE',   0);
 define('_ADMIN_ACTION_HIDE',      1);
@@ -98,7 +101,7 @@ define('_SETTING_USE_POPUPS',       pnModGetVar(__POSTCALENDAR__,'pcUsePopups'))
 define('_SETTING_USE_INT_DATES',   pnModGetVar(__POSTCALENDAR__,'pcUseInternationalDates'));
 define('_SETTING_OPEN_NEW_WINDOW', pnModGetVar(__POSTCALENDAR__,'pcEventsOpenInNewWindow'));
 define('_SETTING_DAY_HICOLOR',       pnModGetVar(__POSTCALENDAR__,'pcDayHighlightColor'));
-define('_SETTING_FIRST_DAY_WEEK',  pnModGetVar(__POSTCALENDAR__,'pcFirstDayOfWeek'));
+define('_SETTING_FIRST_DAY_WEEK', pnModGetVar(__POSTCALENDAR__,'pcFirstDayOfWeek'));
 define('_SETTING_DATE_FORMAT',       pnModGetVar(__POSTCALENDAR__,'pcEventDateFormat'));
 define('_SETTING_TIME_24HOUR',       pnModGetVar(__POSTCALENDAR__,'pcTime24Hours'));
 define('_SETTING_DIRECT_SUBMIT',   pnModGetVar(__POSTCALENDAR__,'pcAllowDirectSubmit'));
@@ -145,11 +148,6 @@ unset($userlang);
 //=========================================================================
 //  Setup Smarty defines
 //=========================================================================
-if(!class_exists('Smarty')) {
-    define('_PC_SMARTY_LOADED',true);
-    define('SMARTY_DIR',"modules/$pcDir/pnincludes/Smarty/");
-    require_once(SMARTY_DIR.'/Smarty.class.php');
-}
 require_once("modules/$pcDir/pcSmarty.class.php");
 //=========================================================================
 //  utility functions for postcalendar
@@ -196,7 +194,7 @@ function postcalendar_removeScriptTags($in)
     return preg_replace("/<script.*?>(.*?)<\/script>/","",$in);
 }
 
-function &postcalendar_getDate($format='%Y%m%d')
+function postcalendar_getDate($format='%Y%m%d')
 {
     list($Date, $jumpday, $jumpmonth, $jumpyear, $jumpdate) =
         pnVarCleanFromInput('Date', 'jumpday', 'jumpmonth', 'jumpyear', 'jumpdate');
@@ -500,7 +498,7 @@ function &postcalendar_userapi_getCategories()
     $sql = "SELECT pc_catid,pc_catname,pc_catcolor,pc_catdesc,
             pc_recurrtype,pc_recurrspec,pc_recurrfreq,pc_duration,
             pc_dailylimit,pc_end_date_flag,pc_end_date_type,pc_end_date_freq,
-            pc_end_all_day,pc_cattype FROM $cat_table
+            pc_end_all_day,pc_cattype,pc_active,pc_seq FROM $cat_table
             ORDER BY pc_catname";
     $result = $dbconn->Execute($sql);
 
@@ -511,7 +509,7 @@ function &postcalendar_userapi_getCategories()
     for($i=0; !$result->EOF; $result->MoveNext()) {
         list($catid,$catname,$catcolor,$catdesc,
             $rtype,$rspec,$rfreq,$duration,$limit,$end_date_flag,
-            $end_date_type,$end_date_freq,$end_all_day,$cattype) = $result->fields;
+            $end_date_type,$end_date_freq,$end_all_day,$cattype,$active,$seq) = $result->fields;
         // check the category's permissions
         if (!pnSecAuthAction(0,'PostCalendar::Category',"$catname::$catid",ACCESS_OVERVIEW)) {
             continue;
@@ -521,6 +519,8 @@ function &postcalendar_userapi_getCategories()
         $categories[$i]['color']  = $catcolor;
         $categories[$i]['desc'] = $catdesc;
         $categories[$i]['value_cat_type'] = $cattype;
+        $categories[$i]['active']   = $active;
+        $categories[$i]['sequence']   = $seq;
         $categories[$i]['event_repeat'] = $rtype;
         $rspecs = unserialize($rspec);
         $categories[$i]['event_repeat_freq'] = $rspecs['event_repeat_freq'];

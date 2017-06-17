@@ -11,14 +11,11 @@
  * @brief This file contains the C_AbstractClickmap class, used to control smarty.
  */
 
-/* for $GLOBALS['concurrent_layout','encounter','fileroot','pid','srcdir','style','webroot'] 
+/* for encounter','fileroot','pid','srcdir','style','webroot']
  * remember that include paths are calculated relative to the including script, not this file.
  * to lock the path to this script (so if called from different scripts) use the dirname(FILE) variable
 */
-require_once('../../globals.php');
-
-/* For Controller, the class we're extending. */
-require_once ($GLOBALS['srcdir'] . '/classes/Controller.class.php');
+require_once(dirname(__FILE__).'/../globals.php');
 
 /* For the addform() function */
 require_once ($GLOBALS['srcdir'] . '/forms.inc');
@@ -43,9 +40,9 @@ abstract class C_AbstractClickmap extends Controller {
      * @param template_mod
      *  template module name, passed to Controller's initializer.
      */
-    function C_AbstractClickmap($template_mod = "general") {
-    	parent::Controller();
-    	$returnurl = $GLOBALS['concurrent_layout'] ? 'encounter_top.php' : 'patient_encounter.php';
+    function __construct($template_mod = "general") {
+    	parent::__construct();
+    	$returnurl = 'encounter_top.php';
     	$this->template_mod = $template_mod;
     	$this->template_dir = $GLOBALS['fileroot'] . "/interface/clickmap/template/";
     	$this->assign("DONT_SAVE_LINK",$GLOBALS['webroot'] . "/interface/patient_file/encounter/$returnurl");
@@ -55,7 +52,7 @@ abstract class C_AbstractClickmap extends Controller {
 
     /**
      * @brief Override this abstract function with your implementation of createModel.
-     * 
+     *
      * @param $form_id
      *  An optional id of a form, to populate data from.
      *
@@ -66,7 +63,7 @@ abstract class C_AbstractClickmap extends Controller {
 
     /**
      * @brief Override this abstract function with your implememtation of getImage
-     * 
+     *
      * @return The path to the image backing this form relative to the webroot.
      */
     abstract function getImage();
@@ -160,7 +157,7 @@ abstract class C_AbstractClickmap extends Controller {
             $GLOBALS['encounter'] = date("Ymd");
         }
         if(empty($_POST['id'])) {
-            addForm($GLOBALS['encounter'], 
+            addForm($GLOBALS['encounter'],
                     $this->model->getTitle(),
                     $this->model->id,
                     $this->model->getCode(),

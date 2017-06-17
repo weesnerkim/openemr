@@ -7,7 +7,10 @@
 // of the License, or (at your option) any later version.
 
 require_once("Claim.class.php");
-
+function stripZipCode($zip)
+{
+    return preg_replace('/[-\s]*/','',$zip);
+}
 function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
 
   $today = time();
@@ -26,10 +29,10 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     date('Y-m-d H:i', $today) . ".\n";
 
   $out .= "ISA" .
-    "*00" .
-    "*          " .
-    "*00" .
-    "*          " .
+    "*" . $claim->x12gsisa01() .
+    "*" . $claim->x12gsisa02() .
+    "*" . $claim->x12gsisa03() .
+    "*" . $claim->x12gsisa04() .
     "*" . $claim->x12gsisa05() .
     "*" . $claim->x12gssenderid() .
     "*" . $claim->x12gsisa07() .
@@ -47,7 +50,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
   $out .= "GS" .
     "*HC" .
     "*" . $claim->x12gsgs02() .
-    "*" . trim($claim->x12gsreceiverid()) .
+    "*" . trim($claim->x12gs03()) .
     "*" . date('Ymd', $today) .
     "*" . date('Hi', $today) .
     "*1" .
@@ -83,9 +86,50 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
   }
 
   ++$edicount;
-  //Field length is limited to 35. See nucc dataset page 63 www.nucc.org
-  $billingFacilityName = substr($claim->billingFacilityName(), 0, $CMS_5010 ? 60 : 35);
-  $out .= "NM1" .       // Loop 1000A Submitter
+
+  if ($claim->federalIdType() == "SY") { // check entity type for NM*102 1 == person, 2 == non-person entity
+    $tempName = $claim->billingFacilityName();
+    $partsName = explode(' ', $tempName);// Loop 1000A submitter entity == person
+    $num_parts = count($partsName);
+    switch ($num_parts) {
+      case "2":
+        $firstName = $partsName[0];
+        $middleName = '';
+        $lastName = $partsName[1];
+        $suffixName = '';
+      break;
+      case "3":
+        $firstName = $partsName[0];
+        $middleName = $partsName[1];
+        $lastName = $partsName[2];
+        $suffixName = '';
+      break;
+      case "4":
+        $firstName = $partsName[0];
+        $middleName = $partsName[1];
+        $lastName = $partsName[2];
+        $suffixName = $partsName[3];
+      break;
+      default:
+        $log .= "*** submitter name in 1000A loop has more than 4 parts, may not be desirable\n";
+        $firstName = $partsName[0];
+        $middleName = $partsName[1];
+        $lastName = $partsName[2];
+        $suffixName = $partsName[3];
+    }
+    $out .= "NM1" . // Loop 1000A Submitter
+    "*41" .
+    "*1" .
+    "*" . $lastName .
+    "*" . $firstName .
+    "*" . $middleName .
+    "*" . // Name Prefix not used
+    "*" . // Name Suffix not used
+    "*46";
+  } else {    //Field length is limited to 35. See nucc dataset page 63 www.nucc.org
+    $billingFacilityName = substr($claim->billingFacilityName(), 0, $CMS_5010 ? 60 : 35);
+    if ($billingFacilityName == '') $log .= "*** billing facility name in 1000A loop is empty\n";
+    $out .= "NM1" .
     "*41" .
     "*2" .
     "*" . $billingFacilityName .
@@ -94,11 +138,13 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     "*" .
     "*" .
     "*46";
-   if (trim($claim->x12gsreceiverid()) == '470819582') { // if ECLAIMS EDI
+  }
+
+  if (trim($claim->x12gsreceiverid()) == '470819582') { // if ECLAIMS EDI
     $out  .=  "*" . $claim->clearingHouseETIN();
-   } else {
+  } else {
     $out  .=  "*" . $claim->billingFacilityETIN();
-   }
+  }
     $out .= "~\n";
 
   ++$edicount;
@@ -107,7 +153,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     "*" . $claim->billingContactName() .
     "*TE" .
     "*" . $claim->billingContactPhone();
-  if ($claim->x12gsper06()) {
+  if (!$CMS_5010 && $claim->x12gsper06()) {
     $out .= "*ED*" . $claim->x12gsper06();
   }
   $out .= "~\n";
@@ -137,13 +183,61 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
 
   $HLBillingPayToProvider = $HLcount++;
 
-  // Situational PRV segment (for provider taxonomy code) omitted here.
+  // Situational PRV segment for provider taxonomy code for Medicaid.
+    if ($claim->claimType() == 'MC') {
+        ++$edicount;
+        $out .= "PRV*BI*ZZ" .
+        "*" . $claim->providerTaxonomy() .
+        "~\n";
+    }
+
   // Situational CUR segment (foreign currency information) omitted here.
 
   ++$edicount;
   //Field length is limited to 35. See nucc dataset page 63 www.nucc.org
-  $billingFacilityName = substr($claim->billingFacilityName(), 0, $CMS_5010 ? 60 : 35);
-  $out .= "NM1" .       // Loop 2010AA Billing Provider
+  if ($claim->federalIdType() == "SY") { // check for entity type like in 1000A
+    $tempName = $claim->billingFacilityName();
+    $partsName = explode(' ', $tempName);// Loop 2010AA Billing Provider entity == person
+    $num_parts = count($partsName);
+    switch ($num_parts) {
+      case "2":
+        $firstName = $partsName[0];
+        $middleName = '';
+        $lastName = $partsName[1];
+        $suffixName = '';
+      break;
+      case "3":
+        $firstName = $partsName[0];
+        $middleName = $partsName[1];
+        $lastName = $partsName[2];
+        $suffixName = '';
+      break;
+      case "4":
+        $firstName = $partsName[0];
+        $middleName = $partsName[1];
+        $lastName = $partsName[2];
+        $suffixName = $partsName[3];
+      break;
+      default:
+        $log .= "*** billing provider name in 2010AA loop has more than 4 parts, may not be desirable\n";
+        $firstName = $partsName[0];
+        $middleName = $partsName[1];
+        $lastName = $partsName[2];
+        $suffixName = $partsName[3];
+    }
+  $out .= "NM1" .
+  "*85" .
+  "*1" .
+  "*" . $lastName .
+  "*" . $firstName .
+  "*" . $middleName .
+  "*" . // Name Prefix not used
+  "*" . $suffixName;
+  }
+  else {
+    $billingFacilityName = substr($claim->billingFacilityName(), 0, $CMS_5010 ? 60 : 35);
+    if ($billingFacilityName == '') $log .= "*** billing facility name in 2010A loop is empty\n";
+    $out .= "NM1" . // Loop 2010AA Billing Provider
     "*85" .
     "*2" .
     "*" . $billingFacilityName .
@@ -151,6 +245,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     "*" .
     "*" .
     "*";
+  }
   if ($claim->billingFacilityNPI()) {
     $out .= "*XX*" . $claim->billingFacilityNPI();
   }
@@ -174,7 +269,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
   $out .= "N4" .
     "*" . $claim->billingFacilityCity() .
     "*" . $claim->billingFacilityState() .
-    "*" . $claim->billingFacilityZip() .
+    "*" . stripZipCode($claim->billingFacilityZip()) .
     "~\n";
 
   if ($CMS_5010 || ($claim->billingFacilityNPI() && $claim->billingFacilityETIN())) {
@@ -233,7 +328,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     $out .= "N4" .
       "*" . $claim->billingFacilityCity() .
       "*" . $claim->billingFacilityState() .
-      "*" . $claim->billingFacilityZip() .
+      "*" . stripZipCode($claim->billingFacilityZip()) .
       "~\n";
 
     if ($claim->billingFacilityNPI() && $claim->billingFacilityETIN()) {
@@ -306,7 +401,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     $out .= "N4" .
       "*" . $claim->insuredCity() .
       "*" . $claim->insuredState() .
-      "*" . $claim->insuredZip() .
+      "*" . stripZipCode($claim->insuredZip()) .
       "~\n";
 
     ++$edicount;
@@ -338,6 +433,11 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     // Prior to the mandated implementation date and prior to any phase-
     // in period identified by Federal regulation, PI must be sent."
     // *************** Anybody know what that date is? ***************
+	//    August 2011 - Publish interim final rule
+//    October 1, 2012-March 31, 2013 - Enumeration
+//    April 1, 2013-September 30, 2013 - Testing
+ //   October 1, 2013 - Implementation
+
     "*PI" .
     // Zirmed ignores this if using payer name matching:
     "*" . ($encounter_claim ? $claim->payerAltID() : $claim->payerID()) .
@@ -347,7 +447,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
   //   $log .= "*** CMS ID is missing for payer '" . $claim->payerName() . "'.\n";
   // }
 
-  if (!$CMS_5010) {
+  if (true) { // !$CMS_5010
     // The 5010 spec says:
     // "Required when the payer address is available and the submitter intends
     // for the claim to be printed on paper at the next EDI location (for example, a
@@ -362,7 +462,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     $out .= "N4" .
       "*" . $claim->payerCity() .
       "*" . $claim->payerState() .
-      "*" . $claim->payerZip() .
+      "*" . stripZipCode($claim->payerZip()) .
       "~\n";
   }
 
@@ -390,9 +490,10 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
       "*QC" .
       "*1" .
       "*" . $claim->patientLastName() .
-      "*" . $claim->patientFirstName() .
-      "*" . $claim->patientMiddleName() .
-      "~\n";
+      "*" . $claim->patientFirstName();
+    if ($claim->patientMiddleName() !== '') $out .= "*"
+. $claim->patientMiddleName();
+    $out .= "~\n";
 
     ++$edicount;
     $out .= "N3" .
@@ -403,7 +504,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     $out .= "N4" .
       "*" . $claim->patientCity() .
       "*" . $claim->patientState() .
-      "*" . $claim->patientZip() .
+      "*" . stripZipCode($claim->patientZip()) .
       "~\n";
 
     ++$edicount;
@@ -444,9 +545,12 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     "*"  . ($claim->billingFacilityAssignment() ? 'Y' : 'N') .
     "*Y" .
     ($CMS_5010 ? "" : "*C") .
-    "~\n"; 
+    "~\n";
 
-  if ($claim->onsetDate()) {
+  if ($claim->onsetDate() &&
+      ($claim->onsetDate()!== $claim->serviceDate()) &&
+      ($claim->onsetDateValid())
+     ) {
     ++$edicount;
     $out .= "DTP" .       // Date of Onset
       "*431" .
@@ -455,7 +559,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
       "~\n";
   }
 
-  if ($claim->dateInitialTreatment()) {
+  if ($claim->dateInitialTreatment() && ($claim->onsetDateValid())) {
     ++$edicount;
     $out .= "DTP" .       // Date of Initial Treatment
       "*454" .
@@ -474,7 +578,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
   // Segment DTP*297 (Last Worked Date) omitted.
   // Segment DTP*296 (Authorized Return to Work Date) omitted.
 
-  if (strcmp($claim->facilityPOS(),'21') == 0) {
+  if (strcmp($claim->facilityPOS(),'21') == 0 && $claim->onsetDateValid() ) {
     ++$edicount;
     $out .= "DTP" .     // Date of Hospitalization
       "*435" .
@@ -512,7 +616,18 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
       "~\n";
   }
 
-  // Segment REF*F8 (Payer Claim Control Number) omitted.
+  // Segment REF*F8 Payer Claim Control Number for claim re-submission.icn_resubmission_number
+
+  #if($claim->billing_options['replacement_claim'] == '1'){
+  if(trim($claim->billing_options['icn_resubmission_number']) > 3){
+    ++$edicount;
+    error_log("Method 1: ".$claim->billing_options['icn_resubmission_number'], 0);
+    $out .= "REF" .
+      "*F8" .
+      "*" . $claim->icnResubmissionNumber() .
+      "~\n";
+  }
+
 
   if ($claim->cliaCode() && ($CMS_5010 || $claim->claimType() === 'MB')) {
     // Required by Medicare when in-house labs are done.
@@ -546,12 +661,27 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
   // Segment CRC (Ambulance Certification) omitted.
   // Segment CRC (Patient Condition Information: Vision) omitted.
   // Segment CRC (Homebound Indicator) omitted.
-  // Segment CRC (EPSDT Referral) omitted.
+
+  // Segment CRC (EPSDT Referral).
+   if($claim->epsdtFlag()) {
+      ++$edicount;
+    $out .= "CRC" .
+      "*ZZ" .
+      "*Y" .
+      "*" . $claim->medicaidReferralCode() .
+      "~\n";
+  }
 
   // Diagnoses, up to $max_per_seg per HI segment.
   $max_per_seg = $CMS_5010 ? 12 : 8;
   $da = $claim->diagArray();
+  if ($claim->diagtype == "ICD9") {
   $diag_type_code = 'BK';
+  }
+  ELSE
+  {
+  $diag_type_code = 'ABK';
+  }
   $tmp = 0;
   foreach ($da as $diag) {
     if ($tmp % $max_per_seg == 0) {
@@ -560,7 +690,13 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
       $out .= "HI";         // Health Diagnosis Codes
     }
     $out .= "*$diag_type_code:" . $diag;
-    $diag_type_code = 'BF';
+     if ($claim->diagtype == "ICD9") {
+         $diag_type_code = 'BF';
+      }
+      ELSE
+      {
+      $diag_type_code = 'ABF';
+      }
     ++$tmp;
   }
   if ($tmp) $out .= "~\n";
@@ -598,7 +734,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
         "~\n";
     }
 
-    if ($claim->referrerUPIN()) {
+    if (!CMS_5010 && $claim->referrerUPIN()) {
       ++$edicount;
       $out .= "REF" .   // Referring Provider Secondary Identification
         "*1G" .
@@ -607,32 +743,56 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     }
   }
 
-  ++$edicount;
-  $out .= "NM1" .       // Loop 2310B Rendering Provider
-    "*82" .
-    "*1" .
-    "*" . $claim->providerLastName() .
-    "*" . $claim->providerFirstName() .
-    "*" . $claim->providerMiddleName() .
-    "*" .
-    "*";
-  if ($CMS_5010 || $claim->providerNPI()) { $out .=
-    "*XX" .
-    "*" . $claim->providerNPI();
-  } else { $out .=
-    "*34" .                             // not allowed for 5010
-    "*" . $claim->providerSSN();
-    $log .= "*** Rendering provider has no NPI.\n";
-  }
-  $out .= "~\n";
 
-  if ($claim->providerTaxonomy()) {
+  /* Per the implementation guide lines, only include this information if it is different
+   * than the Loop 2010AA information
+   */
+  if(!$CMS_5010 ||
+          ($claim->providerNPIValid() &&
+          $claim->billingFacilityNPI() !== $claim->providerNPI() ))
+  {
     ++$edicount;
-    $out .= "PRV" .
-      "*PE" . // PErforming provider
-      "*" . ($CMS_5010 ? "PXC" : "ZZ") .
-      "*" . $claim->providerTaxonomy() .
-      "~\n";
+    $out .= "NM1" .       // Loop 2310B Rendering Provider
+        "*82" .
+        "*1" .
+        "*" . $claim->providerLastName() .
+        "*" . $claim->providerFirstName() .
+        "*" . $claim->providerMiddleName() .
+        "*" .
+        "*";
+    if ($CMS_5010 || $claim->providerNPI()) { $out .=
+        "*XX" .
+        "*" . $claim->providerNPI();
+    } else { $out .=
+        "*34" .                             // not allowed for 5010
+        "*" . $claim->providerSSN();
+        $log .= "*** Rendering provider has no NPI.\n";
+    }
+    $out .= "~\n";
+
+    if ($claim->providerTaxonomy()) {
+        ++$edicount;
+        $out .= "PRV" .
+        "*PE" . // Performing provider
+        "*" .($claim->claimType() != 'MC' ? "PXC" : "ZZ") .
+        "*" . $claim->providerTaxonomy() .
+        "~\n";
+    }
+    // End of Loop 2310B
+  }
+  else
+  {
+    // This loop can only get skipped if we are generating a 5010 claim
+    if(!($claim->providerNPIValid()))
+    {
+        /* If the loop was skipped because the provider NPI was invalid, generate
+         * a warning for the log.*/
+        $log.="*** Skipping 2310B because ".$claim->providerLastName() ."," . $claim->providerFirstName() . " has invalid NPI.\n";
+    }
+    /* Skipping this segment because the providerNPI and the billingFacilityNPI are identical
+     * is a normal condition, so no need to warn.
+     */
+
   }
 
   // 4010: REF*1C is required here for the Medicare provider number if NPI was
@@ -654,8 +814,10 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
   }
 
   // Loop 2310D is omitted in the case of home visits (POS=12).
-  if ($claim->facilityPOS() != 12 &&
-      (!$CMS_5010 || $claim->facilityNPI() != $claim->billingFacilityNPI()))
+  if ($claim->facilityPOS() != 12 && (!$CMS_5010 || 
+      ($claim->facilityNPI() != $claim->billingFacilityNPI() || 
+      ($claim->facilityNPI() == $claim->billingFacilityNPI() &&
+       $claim->facilityStreet() != $claim->billingFacilityStreet()))))
     {
     ++$edicount;
     $out .= "NM1" .       // Loop 2310D Service Location
@@ -692,7 +854,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
       $out .= "N4" .
         "*" . $claim->facilityCity() .
         "*" . $claim->facilityState() .
-        "*" . $claim->facilityZip() .
+        "*" . stripZipCode($claim->facilityZip()) .
         "~\n";
     }
   }
@@ -854,7 +1016,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     $out .= "N4" .
       "*" . $claim->insuredCity($ins) .
       "*" . $claim->insuredState($ins) .
-      "*" . $claim->insuredZip($ins) .
+      "*" . stripZipCode($claim->insuredZip($ins)) .
       "~\n";
 
     // Segment REF (Other Subscriber Secondary Identification) omitted.
@@ -892,7 +1054,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
       $out .= "N4" .
         "*" . $claim->payerCity($ins) .
         "*" . $claim->payerState($ins) .
-        "*" . $claim->payerZip($ins) .
+        "*" . stripZipCode($claim->payerZip($ins)) .
         "~\n";
     } // end Gateway EDI
 
@@ -943,7 +1105,18 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
       $out .= $dindex;
       if (++$i >= 4) break;
     }
+    # needed for epstd
+  if($claim->epsdtFlag()) {
+    $out .= "*" .
+    "*" .
+    "*" .
+    "*Y" .
+    "~\n";
+  }
+  else
+  {
     $out .= "~\n";
+  }
 
     if (!$claim->cptCharges($prockey)) {
       $log .= "*** Procedure '" . $claim->cptKey($prockey) . "' has no charges!\n";
@@ -968,6 +1141,15 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
       "*D8" .
       "*" . $claim->serviceDate() .
       "~\n";
+
+    $testnote = rtrim($claim->cptNotecodes($prockey));
+    if (!empty($testnote)) {
+      ++$edicount;
+      $out .= "NTE" .     // Explain Unusual Circumstances.
+        "*ADD" .
+        "*" . $claim->cptNotecodes($prockey) .
+        "~\n";
+    }
 
     // Segment DTP*471 (Prescription Date) omitted.
     // Segment DTP*607 (Revision/Recertification Date) omitted.
@@ -1153,7 +1335,7 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
         	$a[4] != null ) {
         	$out .= "CAS02" . // Previous payer's adjustment reason
 	          "*" . $a[4] .
-	          "~\n";	
+	          "~\n";
         }
         *************************************************************/
       }
@@ -1189,6 +1371,9 @@ function gen_x12_837($pid, $encounter, &$log, $encounter_claim=false) {
     "*1" .
     "*000000001" .
     "~\n";
+
+  // Remove any trailing empty fields (delimiters) from each segment.
+  $out = preg_replace('/\*+~/', '~', $out);
 
   $log .= "\n";
   return $out;

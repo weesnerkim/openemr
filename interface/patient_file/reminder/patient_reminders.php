@@ -1,6 +1,6 @@
 <?php
 // Copyright (C) 2011 by following authors:
-//   -Brady Miller <brady@sparmy.com>
+//   -Brady Miller <brady.g.miller@gmail.com>
 //   -Ensofttek, LLC
 //
 // This program is free software; you can redistribute it and/or
@@ -8,20 +8,13 @@
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
 
 require_once("../../globals.php");
 require_once("$srcdir/options.inc.php");
-require_once("$srcdir/formdata.inc.php");
 require_once("$srcdir/reminders.php");
 require_once("$srcdir/clinical_rules.php");
-
-//Remove time limit, since script can take many minutes
-set_time_limit(0);
+require_once "$srcdir/report_database.inc";
 ?>
 
 <html>
@@ -30,7 +23,7 @@ set_time_limit(0);
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
 
 <style type="text/css">@import url(../../../library/dynarch_calendar.css);</style>
-<script type="text/javascript" src="../../../library/dialog.js"></script>
+<script type="text/javascript" src="../../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 <script type="text/javascript" src="../../../library/textformat.js"></script>
 <script type="text/javascript" src="../../../library/dynarch_calendar.js"></script>
 <?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
@@ -38,7 +31,7 @@ set_time_limit(0);
 <script type="text/javascript" src="../../../library/js/common.js"></script>
 <script type="text/javascript" src="../../../library/js/fancybox/jquery.fancybox-1.2.6.js"></script>
 <link rel="stylesheet" type="text/css" href="../../../library/js/fancybox/jquery.fancybox-1.2.6.css" media="screen" />
-<script type="text/javascript" src="../../../library/js/jquery.1.3.2.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-3-2/index.js"></script>
 
 <script LANGUAGE="JavaScript">
 var mypcc = '<?php echo $GLOBALS['phone_country_code'] ?>';
@@ -53,8 +46,10 @@ $sortby = $_GET['sortby'];
 $sortorder = $_GET['sortorder'];
 $begin = $_GET['begin'];
 
-// Update the reminders and show debugging data
-$update_rem_log = update_reminders('', $patient_id);
+if (!empty($patient_id)) {
+  //Only update one patient
+  $update_rem_log = update_reminders('', $patient_id);
+}
 
 if ($mode == "simple") {
   // Collect the rules for the per patient rules selection tab
@@ -82,14 +77,14 @@ if ($mode == "simple") {
   <span class='title'><?php echo htmlspecialchars( xl('Patient Reminders'), ENT_NOQUOTES); ?></span>
 </div>
 <?php if ($mode == "simple") { ?> 
-  <div style='float:left;margin-right:10px'>
+  <div id='namecontainer_preminders' class='namecontainer_preminders' style='float:left;margin-right:10px'>
     <?php echo htmlspecialchars( xl('for'), ENT_NOQUOTES);?>&nbsp;
     <span class="title">
       <a href="../summary/demographics.php" onclick="top.restoreSession()"><?php echo htmlspecialchars( getPatientName($pid), ENT_NOQUOTES); ?></a>
     </span>
   </div>
   <div>
-    <a href="../summary/demographics.php" <?php if (!$GLOBALS['concurrent_layout']) echo "target='Main'"; ?> class="css_button" onclick="top.restoreSession()">
+    <a href="../summary/demographics.php" class="css_button" onclick="top.restoreSession()">
       <span><?php echo htmlspecialchars( xl('Back To Patient'), ENT_NOQUOTES);?></span>
     </a>
   </div>
@@ -104,20 +99,20 @@ $sort = array("category, item", "lname, fname", "due_status", "date_created", "h
 if($sortby == "") {
   $sortby = $sort[0];
 }
-if($sortorder == "") { 
+if($sortorder == "") {
   $sortorder = "asc";
 }
 for($i = 0; $i < count($sort); $i++) {
-  $sortlink[$i] = "<a href=\"patient_reminders.php?patient_id=$patient_id&mode=$mode&sortby=$sort[$i]&sortorder=asc\" onclick=\"top.restoreSession()\">" .
+  $sortlink[$i] = "<a href=\"patient_reminders.php?patient_id=" . attr($patient_id) ."&mode=" . attr($mode) . "&sortby=" . attr($sort[$i]) . "&sortorder=asc\" onclick=\"top.restoreSession()\">" .
     "<img src=\"../../../images/sortdown.gif\" border=0 alt=\"".htmlspecialchars(xl('Sort Up'), ENT_QUOTES)."\"></a>";
 }
 for($i = 0; $i < count($sort); $i++) {
   if($sortby == $sort[$i]) {
     switch($sortorder) {
-      case "asc"      : $sortlink[$i] = "<a href=\"patient_reminders.php?patient_id=$patient_id&mode=$mode&sortby=$sortby&sortorder=desc\" onclick=\"top.restoreSession()\">" .
+      case "asc"      : $sortlink[$i] = "<a href=\"patient_reminders.php?patient_id=" . attr($patient_id) . "&mode=" . attr($mode) . "&sortby=" . attr($sortby) . "&sortorder=desc\" onclick=\"top.restoreSession()\">" .
                           "<img src=\"../../../images/sortup.gif\" border=0 alt=\"".htmlspecialchars(xl('Sort Up'), ENT_QUOTES)."\"></a>";
                         break;
-      case "desc"     : $sortlink[$i] = "<a href=\"patient_reminders.php?patient_id=$patient_id&mode=$mode&sortby=$sortby&sortorder=asc\" onclick=\"top.restoreSession()\">" .
+      case "desc"     : $sortlink[$i] = "<a href=\"patient_reminders.php?patient_id=" . attr($patient_id) . "&mode=" . attr($mode) . "&sortby=" . attr($sortby) . "&sortorder=asc\" onclick=\"top.restoreSession()\">" .
                           "<img src=\"../../../images/sortdown.gif\" border=0 alt=\"".htmlspecialchars(xl('Sort Down'), ENT_QUOTES)."\"></a>";
                         break;
     } break;
@@ -156,7 +151,7 @@ if($end < $start) {
 if($prev >= 0) {
   $prevlink = "<a href=\"patient_reminders.php?patient_id=$patient_id&mode=$mode&sortby=$sortby&sortorder=$sortorder&begin=$prev\" onclick=\"top.restoreSession()\"><<</a>";
 }
-else { 
+else {
   $prevlink = "<<";
 }
 
@@ -174,12 +169,14 @@ else {
 
 <?php if ($mode == "simple") { // show the per patient rule setting option ?>
   <ul class="tabNav">
-    <li class='current'><a href='/play/javascript-tabbed-navigation/'><?php echo htmlspecialchars( xl('Main'), ENT_NOQUOTES); ?></a></li>
-    <li ><a href='/play/javascript-tabbed-navigation/' onclick='top.restoreSession()'><?php echo htmlspecialchars( xl('Rules'), ENT_NOQUOTES); ?></a></li>
+    <li class='current'><a href='#'><?php echo htmlspecialchars( xl('Main'), ENT_NOQUOTES); ?></a></li>
+    <li ><a href='#' onclick='top.restoreSession()'><?php echo htmlspecialchars( xl('Rules'), ENT_NOQUOTES); ?></a></li>
   </ul>
   <div class="tabContainer">
   <div class="tab current" style="height:auto;width:97%;">
 <?php } ?>
+
+<form method='post' name='theform' id='theform'>
 
 <div id='report_parameters'>
   <table>
@@ -188,7 +185,7 @@ else {
         <div style='float:left'>
           <table class='text'>
             <tr>
-              <td class='label'>
+              <td class='label_custom'>
                 <?php echo " "; ?>
               </td>
             </tr>
@@ -201,13 +198,19 @@ else {
             <td>
               <div style='margin-left:15px'>
                 <?php if ($mode == "admin") { ?>
-                 <a href='#' class='css_button' onclick='return ReminderBatch()'>
-                   <span><?php echo htmlspecialchars( xl('Send Reminders Batch'), ENT_NOQUOTES); ?></span>
+                 <a id='process_button' href='#' class='css_button' onclick='return ReminderBatch("process")'>
+                   <span><?php echo htmlspecialchars( xl('Process Reminders'), ENT_NOQUOTES); ?></span>
                  </a>
-                <?php } ?>
+                 <a id='process_send_button' href='#' class='css_button' onclick='return ReminderBatch("process_send")'>
+                   <span><?php echo htmlspecialchars( xl('Process and Send Reminders'), ENT_NOQUOTES); ?></span>
+                 </a>
+                 <span id='status_span'></span>
+                 <div id='processing' style='margin:10px;display:none;'><img src='../../pic/ajax-loader.gif'/></div>
+                <?php } else { ?>
                 <a href='patient_reminders.php?patient_id=<?php echo $patient_id; ?>&mode=<?php echo $mode; ?>' class='css_button' onclick='top.restoreSession()'>
                   <span><?php echo htmlspecialchars( xl('Refresh'), ENT_NOQUOTES); ?></span>
                 </a>
+                <?php } ?>
               </div>
             </td>
             <td align=right class='text'><?php echo $prevlink." ".$end." of ".$total." ".$nextlink; ?></td>
@@ -320,6 +323,9 @@ else {
   </div>
 <?php } ?>
 
+<input type='hidden' name='form_new_report_id' id='form_new_report_id' value=''/>
+</form>
+
 <script language="javascript">
 
 $(document).ready(function(){
@@ -338,12 +344,59 @@ $(document).ready(function(){
 
 });
 
-// Show a template popup of patient reminders batch sending tool.
-function ReminderBatch() {
-  top.restoreSession();
-  dlgopen('../../batchcom/batch_reminders.php', '_blank', 600, 500);
-  return false;
-}
+ // Show a template popup of patient reminders batch sending tool.
+ function ReminderBatch(processType) {
+   //Hide the buttons and show the processing animation
+   $("#process_button").hide();
+   $("#process_send_button").hide();
+   $("#processing").show();
+
+   top.restoreSession();
+   $.get("../../../library/ajax/collect_new_report_id.php",
+     function(data){
+       // Set the report id in page form
+       $("#form_new_report_id").attr("value",data);
+
+       // Start collection status checks
+       collectStatus($("#form_new_report_id").val());
+
+       // Run the report
+       top.restoreSession();
+       $.post("../../../library/ajax/execute_pat_reminder.php",
+         {process_type: processType,
+          execute_report_id: $("#form_new_report_id").val()
+         });
+   });
+
+   return false;
+ }
+
+ function collectStatus(report_id) {
+   // Collect the status string via an ajax request and place in DOM at timed intervals
+   top.restoreSession();
+   // Do not send the skip_timeout_reset parameter, so don't close window before report is done.
+   $.post("../../../library/ajax/status_report.php",
+     {status_report_id: report_id},
+     function(data){
+       if (data == "PENDING") {
+         // Place the pending string in the DOM
+         $('#status_span').replaceWith("<span id='status_span'><?php echo xlt("Preparing To Run Report"); ?></span>");
+       }
+       else if (data == "COMPLETE") {
+         // Go into the results page
+         top.restoreSession();
+         link_report = "patient_reminders.php?mode=admin&patient_id=";
+         window.open(link_report,'_self',false);
+       }
+       else {
+         // Place the string in the DOM
+         $('#status_span').replaceWith("<span id='status_span'>"+data+"</span>");
+       }
+   });
+   // run status check every 10 seconds
+   var repeater = setTimeout("collectStatus("+report_id+")", 10000);
+ }
+
 </script>
 </body>
 </html>

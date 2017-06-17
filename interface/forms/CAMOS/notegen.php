@@ -1,8 +1,6 @@
 <?php
 $depth = '../../../';
 include_once ($depth.'interface/globals.php');
-include_once($depth.'library/formdata.inc.php');
-include_once ($depth.'library/classes/class.ezpdf.php');
 include_once("content_parser.php");
 ?>
 <?php
@@ -33,7 +31,7 @@ if (!$_POST['submit_pdf'] && !$_POST['submit_html'] && !($_GET['pid'] && $_GET['
 <?php xl('Print Notes','e'); ?>
 </title>
 <style type="text/css">@import url('<?php echo $depth ?>library/dynarch_calendar.css');</style>
-<script type="text/javascript" src="<?php echo $depth ?>library/dialog.js"></script>
+<script type="text/javascript" src="<?php echo $depth ?>library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 <script type="text/javascript" src="<?php echo $depth ?>library/textformat.js"></script>
 <script type="text/javascript" src="<?php echo $depth ?>library/dynarch_calendar.js"></script>
 <?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
@@ -214,7 +212,7 @@ if ($_POST['submit_pdf'] || $_POST['submit_html'] || ($_GET['pid'] && $_GET['enc
 
 			$query = sqlStatement("select t2.id, t2.fname, t2.lname, t2.title from forms as t1 join users as t2 on " .
 				"(t1.user like t2.username) where t1.pid=$pid and t1.encounter=$encounter");
-			if ($results = mysql_fetch_array($query, MYSQL_ASSOC)) {
+			if ($results = sqlFetchArray($query)) {
 				$name = $results['fname']." ".$results['lname'].", ".$results['title'];
 				$user_id = $results['id'];
 			}
@@ -228,7 +226,8 @@ if ($_POST['submit_pdf'] || $_POST['submit_html'] || ($_GET['pid'] && $_GET['enc
 	}
 ?>
         <script language='JavaScript'>
-        window.print();
+        var win = top.printLogPrint ? top : opener.top;
+        win.printLogPrint(window);
         </script>
         </div>
         </body>
@@ -237,8 +236,8 @@ if ($_POST['submit_pdf'] || $_POST['submit_html'] || ($_GET['pid'] && $_GET['enc
     exit;
     }
     else { // print as pdf
-  	$pdf =& new Cezpdf();
-	$pdf->selectFont($depth.'library/fonts/Helvetica');
+  	$pdf = new Cezpdf();
+	$pdf->selectFont('Helvetica');
 	$pdf->ezSetCmMargins(3,1,1,1);
 	$first = 1;
 	foreach ($output as $datekey => $dailynote) {
@@ -322,7 +321,7 @@ if ($_POST['submit_pdf'] || $_POST['submit_html'] || ($_GET['pid'] && $_GET['enc
 
 			$query = sqlStatement("select t2.id, t2.fname, t2.lname, t2.title from forms as t1 join users as t2 on " .
 				"(t1.user like t2.username) where t1.pid=$pid and t1.encounter=$encounter");
-			if ($results = mysql_fetch_array($query, MYSQL_ASSOC)) {
+			if ($results = sqlFetchArray($query)) {
 				$name = $results['fname']." ".$results['lname'].", ".$results['title'];
 				$user_id = $results['id'];
 			}
@@ -337,10 +336,10 @@ if ($_POST['submit_pdf'] || $_POST['submit_html'] || ($_GET['pid'] && $_GET['enc
     }
 }
 function getFormData($start_date,$end_date,$lname,$fname) { //dates in sql format
-        
+
         // All 4 parameters have previously been trimmed, globally validated,
 	//  and prepared for database insert
-    
+
 	$name_clause = '';
 	$date_clause = "date(t2.date) >= '".$start_date."' and date(t2.date) <= '".$end_date."' ";
 	if ($lname || $fname) {
@@ -359,13 +358,13 @@ function getFormData($start_date,$end_date,$lname,$fname) { //dates in sql forma
 	      	"t2.reason from " .
 		"forms as t1 join " .
 		"form_encounter as t2 on " .
-		"(t1.pid = t2.pid and t1.encounter = t2.encounter) " . 
+		"(t1.pid = t2.pid and t1.encounter = t2.encounter) " .
 		"join patient_data as t3 on " .
 		"(t1.pid = t3.pid) where " .
 		$date_clause .
 		$name_clause .
 		"order by date,pid");
-	while ($results1 = mysql_fetch_array($query1, MYSQL_ASSOC)) {
+	while ($results1 = sqlFetchArray($query1)) {
 		if (!$dates[$results1['datekey']]) {
 			$dates[$results1['datekey']] = array();
 		}
@@ -386,26 +385,26 @@ function getFormData($start_date,$end_date,$lname,$fname) { //dates in sql forma
 		// get icd9 codes for this encounter
 		$query2 = sqlStatement("select * from billing where encounter = ".
 			$results1['enc']." and pid = ".$results1['pid']." and code_type like 'ICD9' and activity=1");
-                while ($results2 = mysql_fetch_array($query2, MYSQL_ASSOC)) {
+                while ($results2 = sqlFetchArray($query2)) {
 			array_push($dates[$results1['datekey']][$results1['pid'].'_'.$results1['enc']]['billing'],
 				$results2['code'].' '.$results2['code_text']);
 		}
 		if (strtolower($results1['form_name']) == 'vitals') { // deal with Vitals
 			$query2 = sqlStatement("select * from form_vitals where id = " .
-			    	$results1['form_id']);	
-	                if ($results2 = mysql_fetch_array($query2, MYSQL_ASSOC)) {
+			    	$results1['form_id']);
+	                if ($results2 = sqlFetchArray($query2)) {
 				$dates[$results1['datekey']][$results1['pid'].'_'.$results1['enc']]['vitals'] = formatVitals($results2);
 			}
 		}
 		if (substr(strtolower($results1['form_name']),0,5) == 'camos') { // deal with camos
-			$query2 = sqlStatement("select category,subcategory,item,content,date_format(date,'%h:%i %p') as date from form_CAMOS where id = " .
-			    	$results1['form_id']);	
-	                if ($results2 = mysql_fetch_array($query2, MYSQL_ASSOC)) {
+			$query2 = sqlStatement("select category,subcategory,item,content,date_format(date,'%h:%i %p') as date from ".mitigateSqlTableUpperCase("form_CAMOS")." where id = " .
+			    	$results1['form_id']);
+	                if ($results2 = sqlFetchArray($query2)) {
 				if ($results2['category'] == 'exam') {
 					array_push($dates[$results1['datekey']][$results1['pid'].'_'.$results1['enc']]['exam'],$results2['content']);
 				}
 				elseif ($results2['category'] == 'prescriptions') {
-					array_push($dates[$results1['datekey']][$results1['pid'].'_'.$results1['enc']]['prescriptions'],preg_replace("/\n+/",' ',$results2['content'])); 
+					array_push($dates[$results1['datekey']][$results1['pid'].'_'.$results1['enc']]['prescriptions'],preg_replace("/\n+/",' ',$results2['content']));
 				}
 				elseif ($results2['category'] == 'communications') {
 					//do nothing

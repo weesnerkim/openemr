@@ -3,6 +3,10 @@
  // $Author$
  //
  // $Log$
+
+ // Revision 1.5  2016/02/016   sherwin gaddis
+ // fix broken url
+
  // Revision 1.4  2008/05/09 20:10:28  cfapress
  // Changes to handle to HTML returned by rxlist.com
  //
@@ -34,7 +38,8 @@ define('__CLASS_RXLIST_PHP__', true);
 class RxList {
 
 	function getPage ( $query ) {
-		$url = "http://www.rxlist.com/cgi/rxlist.cgi?drug=".
+		$url = "http://www.rxlist.com/script/main/srchcont_rxlist.asp?src=".
+		//$url = "http://www.rxlist.com/cgi/rxlist.cgi?drug=".
 		// $url = "http://129.250.146.18/cgi/rxlist.cgi?drug=".
 			urlencode($query);
 
@@ -67,7 +72,7 @@ class RxList {
 		return $list;
 	} // end function RxList::get_list
 
-        /* break the web page into a collection of TAGS 
+        /* break the web page into a collection of TAGS
          * such as <input ..> or <img ... >
          */
 	function parse2tokens( $page ) {

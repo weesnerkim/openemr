@@ -21,7 +21,7 @@ class RuleManager {
     "SELECT lo.title as title, cr.*
            FROM clinical_rules cr
            JOIN list_options lo
-            ON (cr.id = lo.option_id AND lo.list_id = 'clinical_rules')";
+            ON (cr.id = lo.option_id AND lo.list_id = 'clinical_rules' AND lo.activity = 1)";
 
     const SQL_RULE_REMINDER_INTERVAL =
     "SELECT id,
@@ -69,12 +69,16 @@ class RuleManager {
             passive_alert_flag = ?,
             cqm_flag = ?,
             amc_flag = ?,
-            patient_reminder_flag = ?
+            patient_reminder_flag = ?,
+			developer = ?, 
+			funding_source = ?, 
+			release_version = ?,
+                        web_reference = ?
       WHERE id = ? AND pid = 0";
 
     const SQL_UPDATE_TITLE =
     "UPDATE list_options
-        SET title = ?
+        SET title = ?       
       WHERE list_id = 'clinical_rules' AND option_id = ?";
 
     const SQL_REMOVE_INTERVALS =
@@ -121,7 +125,7 @@ class RuleManager {
      * @return Rule
      */
     function getRule($id, $pid = 0) {
-        $ruleResult = sqlQuery( 
+        $ruleResult = sqlQuery(
             self::SQL_RULE_DETAIL . " WHERE id = ? AND pid = ?", array($id, $pid)
         );
 
@@ -130,6 +134,12 @@ class RuleManager {
         }
 
         $rule = new Rule($id, $ruleResult['title']);
+
+        $rule->setDeveloper($ruleResult['developer']);
+        $rule->setFunding($ruleResult['funding_source']);
+        $rule->setRelease($ruleResult['release_version']);
+        $rule->setWeb_ref($ruleResult['web_reference']);
+
         $this->fillRuleTypes( $rule, $ruleResult );
         $this->fillRuleReminderIntervals( $rule );
         $this->fillRuleFilterCriteria( $rule );
@@ -227,10 +237,10 @@ class RuleManager {
         if ( sizeof( $criterion ) > 0 ) {
             foreach( $criterion as $criteria ) {
                 if ( !isset( $ruleTargetGroups[$criteria->groupId] ) ) {
-                    $ruleTargetGroups[$criteria->groupId] = new RuleTargets();        
+                    $ruleTargetGroups[$criteria->groupId] = new RuleTargets();
                 }
                 $ruleTargetGroups[$criteria->groupId]->add( $criteria );
-            }    
+            }
         }
         ksort($ruleTargetGroups);
         return $ruleTargetGroups;
@@ -429,15 +439,15 @@ class RuleManager {
         sqlStatement( "DELETE FROM rule_filter WHERE PASSWORD(CONCAT( id, include_flag, required_flag, method, method_detail, value )) = '". $guid . "'" );
     }
 
-    function updateSummary( $ruleId, $types, $title ) {
+    function updateSummary( $ruleId, $types, $title, $developer, $funding, $release, $web_ref  ) {
         $rule = $this->getRule( $ruleId );
 
         if ( is_null($rule) ) {
             // add
             $result = sqlQuery( "select count(*)+1 AS id from clinical_rules" );
             $ruleId = "rule_" . $result['id'];
-            sqlStatement( "INSERT INTO clinical_rules (id, pid, active_alert_flag, passive_alert_flag, cqm_flag, amc_flag, patient_reminder_flag ) " . 
-                    "VALUES (?,?,?,?,?,?,?) ",
+            sqlStatement( "INSERT INTO clinical_rules (id, pid, active_alert_flag, passive_alert_flag, cqm_flag, amc_flag, patient_reminder_flag, developer, funding_source, release_version, web_reference ) " .
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?) ",
                     array(
                         $ruleId,
                         0,
@@ -445,7 +455,11 @@ class RuleManager {
                         in_array(RuleType::PassiveAlert, $types) ? 1 : 0,
                         in_array(RuleType::CQM, $types) ? 1 : 0,
                         in_array(RuleType::AMC, $types) ? 1 : 0,
-                        in_array(RuleType::PatientReminder, $types) ? 1 : 0
+                        in_array(RuleType::PatientReminder, $types) ? 1 : 0,
+						$developer,
+						$funding,
+						$release,
+                                                $web_ref
                     )
             );
 
@@ -461,6 +475,10 @@ class RuleManager {
                 in_array(RuleType::CQM, $types) ? 1 : 0,
                 in_array(RuleType::AMC, $types) ? 1 : 0,
                 in_array(RuleType::PatientReminder, $types) ? 1 : 0,
+                $developer,
+                $funding,
+                $release,
+                $web_ref,
                 $rule->id )
             );
 
@@ -577,7 +595,7 @@ class RuleManager {
             // update interval
             $intervalSql =
                 "UPDATE rule_target
-                    SET rule_target.value = ?, rule_target.interval = ?
+                    SET rule_target.value = ?, rule_target.interval = ?, rule_target.include_flag = '1', rule_target.required_flag = '1'
                   WHERE rule_target.method = ?
                     AND rule_target.id = ?";
 
@@ -589,8 +607,8 @@ class RuleManager {
             );
         } else {
             // insert
-            sqlStatement( "INSERT INTO rule_target ( rule_target.value, rule_target.interval, rule_target.method, rule_target.id ) "
-                                 . "VALUES ( ?, ?, ?, ? ) ", array(
+            sqlStatement( "INSERT INTO rule_target ( rule_target.value, rule_target.interval, rule_target.method, rule_target.id, rule_target.include_flag, rule_target.required_flag ) "
+                                 . "VALUES ( ?, ?, ?, ?, '1', '1' ) ", array(
                 $dbView->intervalType,
                 $dbView->interval,
                 'target_interval',
@@ -710,7 +728,7 @@ class RuleManager {
         }
     }
 
-    private function doRuleLabel( $exists, $listId, $optionId, $title ) {
+    private function doRuleLabel( $exists, $listId, $optionId, $title) {
         if ( $exists) {
             // edit
             sqlStatement( "UPDATE list_options SET title = ? WHERE list_id = ? AND option_id = ?", array(
@@ -720,7 +738,7 @@ class RuleManager {
             );
         } else {
             // update
-            $result = sqlQuery( "select max(seq)+10 AS seq from list_options where list_id = ?", array($listId) );
+            $result = sqlQuery( "select max(seq)+10 AS seq from list_options where list_id = ? AND activity = 1", array($listId) );
             $seq = $result['seq'];
             sqlStatement("INSERT INTO list_options (list_id,option_id,title,seq) VALUES ( ?, ?, ?, ? )", array(
                 $listId,
@@ -732,7 +750,7 @@ class RuleManager {
     }
 
     private function labelExists( $listId, $optionId, $title ) {
-        $result = sqlQuery( "SELECT COUNT(*) AS CT FROM list_options WHERE list_id = ? AND option_id = ? AND title = ?", array($listId, $optionId, $title) );
+        $result = sqlQuery( "SELECT COUNT(*) AS CT FROM list_options WHERE list_id = ? AND option_id = ? AND title = ? AND activity = 1", array($listId, $optionId, $title) );
         if ( $result && $result['CT'] > 0 ) {
             return true;
         } else {

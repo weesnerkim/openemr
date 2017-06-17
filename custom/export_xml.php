@@ -1,18 +1,21 @@
 <?php
+/**
+ * Exports patient demographics to a custom XML format
+ *
+ * @package OpenEMR
+ * @link    http://www.open-emr.org
+ * @author  Rod Roark <rod@sunsetsystems.com>
+ * @author  Roberto Vasquez <robertogagliotta@gmail.com>
+ * @copyright Copyright (c) 2005 Rod Roark <rod@sunsetsystems.com>
+ * @copyright Copyright (c) 2017 Roberto Vasquez <robertogagliotta@gmail.com>
+ * @license https://github.com/openemr/openemr/blob/master/LICENSE GNU General Public License 3
+*/
 
- // Copyright (C) 2005 Rod Roark <rod@sunsetsystems.com>
- //
- // This program is free software; you can redistribute it and/or
- // modify it under the terms of the GNU General Public License
- // as published by the Free Software Foundation; either version 2
- // of the License, or (at your option) any later version.
-
- /////////////////////////////////////////////////////////////////////
- // This program exports patient demographics to a custom XML format.
- /////////////////////////////////////////////////////////////////////
 
  include_once("../interface/globals.php");
  include_once("../library/patient.inc");
+
+ use OpenEMR\Core\Header;
 
  $out = "";
  $indent = 0;
@@ -101,20 +104,14 @@
  }
 
  // This mess gets all the info for the patient.
- //
+ //~Well, now it does...-Art
  $insrow = array();
  foreach (array('primary','secondary','tertiary') as $value) {
    $insrow[] = sqlQuery("SELECT id FROM insurance_data WHERE " .
      "pid = '$pid' AND type = '$value' ORDER BY date DESC LIMIT 1");
  }
  $query = "SELECT " .
-  "p.pubpid, p.fname, p.mname, p.lname, p.DOB, p.providerID, " .
-  "p.ss, p.street, p.city, p.state, p.postal_code, p.phone_home, p.sex, " .
-  "p.title, p.country_code, p.occupation, p.phone_biz, p.phone_contact, p.phone_cell, " .
-  "p.status, p.contact_relationship, p.referrer, p.referrerID, p.email, " .
-  "p.language, p.ethnoracial, p.interpretter, p.migrantseasonal, p.family_size, " .
-  "p.monthly_income, p.homeless, p.financial_review, p.hipaa_mail, p.hipaa_voice, " .
-  "p.genericname1, p.genericval1, p.genericname2, p.genericval2, " .
+  "p.*, " .
   "i1.policy_number AS policy1, i1.group_number AS group1, i1.provider as provider1, " .
   "i1.subscriber_fname AS fname1, i1.subscriber_mname AS mname1, i1.subscriber_lname AS lname1, " .
   "i1.subscriber_street AS sstreet1, i1.subscriber_city AS scity1, i1.subscriber_state AS sstate1, " .
@@ -125,7 +122,7 @@
   "i1.subscriber_employer_city AS semployer_city1, i1.subscriber_employer_state AS semployer_state1, " .
   "i1.subscriber_employer_postal_code AS semployer_zip1, " .
   "i1.subscriber_employer_country AS semployer_country1, i1.copay AS copay1, " .
-  "c1.name AS name1, c1.freeb_type AS instype1, " .
+  "c1.name AS name1, c1.ins_type_code AS instype1, " .
   "a1.line1 AS street11, a1.line2 AS street21, a1.city AS city1, a1.state AS state1, " .
   "a1.zip AS zip1, a1.plus_four AS zip41, a1.country AS country1, " .
   "i2.policy_number AS policy2, i2.group_number AS group2, i2.provider as provider2, " .
@@ -137,7 +134,7 @@
   "i2.subscriber_employer_city AS semployer_city2, i2.subscriber_employer_state AS semployer_state2, " .
   "i2.subscriber_employer_postal_code AS semployer_zip2, " .
   "i2.subscriber_employer_country AS semployer_country2, i2.copay AS copay2, " .
-  "c2.name AS name2, c2.freeb_type AS instype2, " .
+  "c2.name AS name2, c2.ins_type_code AS instype2, " .
   "a2.line1 AS street12, a2.line2 AS street22, a2.city AS city2, a2.state AS state2, " .
   "a2.zip AS zip2, a2.plus_four AS zip42, a2.country AS country2, " .
   "i3.policy_number AS policy3, i3.group_number AS group3, i3.provider as provider3, " .
@@ -149,7 +146,7 @@
   "i3.subscriber_employer_city AS semployer_city3, i3.subscriber_employer_state AS semployer_state3, " .
   "i3.subscriber_employer_postal_code AS semployer_zip3, " .
   "i3.subscriber_employer_country AS semployer_country3, i3.copay AS copay3, " .
-  "c3.name AS name3, c3.freeb_type AS instype3, " .
+  "c3.name AS name3, c3.ins_type_code AS instype3, " .
   "a3.line1 AS street13, a3.line2 AS street23, a3.city AS city3, a3.state AS state3, " .
   "a3.zip AS zip3, a3.plus_four AS zip43, a3.country AS country3 " .
   "FROM patient_data AS p " .
@@ -212,6 +209,7 @@
  Add("genericval1"         , $row['genericval1']);
  Add("genericname2"        , $row['genericname2']);
  Add("genericval2"         , $row['genericval2']);
+ Add("billing_note"        , $row['billing_note']);
  Add("hipaa_mail"          , $row['hipaa_mail']);
  Add("hipaa_voice"         , $row['hipaa_voice']);
 
@@ -257,25 +255,27 @@
 ?>
 <html>
 <head>
-<?php html_header_show();?>
-<link rel=stylesheet href="<?echo $css_header;?>" type="text/css">
-<title><?php xl('Export Patient Demographics','e'); ?></title>
+<?php Header::setupHeader(); ?>
+<title><?php echo xlt('Export Patient Demographics XML'); ?></title>
 </head>
-<body>
-
-<p><?php xl('The exported data appears in the text area below.  You can copy and
-paste this into an email or to any other desired destination.','e'); ?></p>
-
-<center>
-<form>
-
-<textarea rows='10' cols='50' style='width:95%' readonly>
-<?php echo $out ?>
-</textarea>
-
-<p><input type='button' value=<?php xl('OK','e','\'','\''); ?> onclick='window.close()' /></p>
-</form>
-</center>
+<body class="body_top">
+  <div class="container">
+     <div class="row">
+        <div class="col-xs-12">
+           <div class="form-group"></div>
+           <div class="form-group">
+              <textarea name="export_data" class="form-control" rows="18" readonly><?php echo text($out) ?></textarea>
+           </div>
+           <div class="form-group">
+              <div class="col-xs-12 text-right">
+                 <div class="btn-group" role="group">
+                    <button type="button" class="btn btn-default btn-cancel" onclick="window.close()"><?php echo xlt("Close"); ?></button>
+                 </div>
+              </div>
+           </div>
+        </div>
+     </div>
+  </div>
 
 </body>
 </html>

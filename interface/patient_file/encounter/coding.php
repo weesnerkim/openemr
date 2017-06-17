@@ -6,8 +6,8 @@ include_once("../../../custom/code_types.inc.php");
 <head>
 <?php html_header_show();?>
 
-<link rel=stylesheet href="<?echo $css_header;?>" type="text/css">
-<script type="text/javascript" src="../../../library/js/jquery.js"></script>
+<link rel=stylesheet href="<?php echo $css_header;?>" type="text/css">
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
 
 <!-- DBC STUFF ================ -->
 
@@ -59,7 +59,7 @@ $pres = "prescription";
 <dt><span href="coding.php" class="title"><?php xl('Coding','e'); ?></span></dt>
 
 <dd><a class="text" href="superbill_codes.php"
- target="<?php echo $GLOBALS['concurrent_layout'] ? '_parent' : 'Main'; ?>"
+ target="_parent"
  onclick="top.restoreSession()">
 <?php xl('Superbill','e'); ?></a></dd>
 

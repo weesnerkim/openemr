@@ -1,29 +1,41 @@
 <?php
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * Patient selector screen.
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @link    http://www.open-emr.org
+ */
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../../globals.php");
 require_once("$srcdir/patient.inc");
-require_once("$srcdir/formdata.inc.php");
+require_once("$srcdir/options.inc.php");
+require_once("$srcdir/report_database.inc");
 
 $fstart = isset($_REQUEST['fstart']) ? $_REQUEST['fstart'] : 0;
 $popup  = empty($_REQUEST['popup']) ? 0 : 1;
 $message = isset($_GET['message']) ? $_GET['message'] : "";
+$from_page = isset($_REQUEST['from_page']) ? $_REQUEST['from_page'] : "";
+
 ?>
 
 <html>
 <head>
 <?php html_header_show();?>
+<script type="text/javascript" src="<?php echo $webroot ?>/interface/main/tabs/js/include_opener.js"></script>    
 
 <link rel=stylesheet href="<?php echo $css_header;?>" type="text/css">
 <style>
@@ -57,6 +69,7 @@ form {
 }
 
 .srName { width: 12%; }
+.srGender { width: 5%; }
 .srPhone { width: 11%; }
 .srSS { width: 11%; }
 .srDOB { width: 8%; }
@@ -89,10 +102,14 @@ form {
 }
 </style>
 
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery-1.2.2.min.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
+
+<?php if ($popup) { ?>
+<script type="text/javascript" src="../../../library/topdialog.js"></script>
+<?php } ?>
 
 <script language="JavaScript">
-
+<?php if ($popup) require($GLOBALS['srcdir'] . "/restoreSession.php"); ?>
 // This is called when forward or backward paging is done.
 //
 function submitList(offset) {
@@ -100,6 +117,7 @@ function submitList(offset) {
  var i = parseInt(f.fstart.value) + offset;
  if (i < 0) i = 0;
  f.fstart.value = i;
+ top.restoreSession();
  f.submit();
 }
 
@@ -108,7 +126,7 @@ function submitList(offset) {
 </head>
 <body class="body_top">
 
-<form method='post' action='patient_select.php' name='theform'>
+<form method='post' action='patient_select.php' name='theform' onsubmit='return top.restoreSession()'>
 <input type='hidden' name='fstart'  value='<?php echo htmlspecialchars( $fstart, ENT_QUOTES); ?>' />
 
 <?php
@@ -176,6 +194,34 @@ if ($popup) {
   while ($row = sqlFetchArray($rez)) $result[] = $row;
   _set_patient_inc_count($sqllimit, count($result), $where, $sqlBindArray);
 }
+else if ($from_page == "cdr_report") {
+  // Collect setting from cdr report
+  echo "<input type='hidden' name='from_page' value='$from_page' />\n";
+  $report_id = isset($_REQUEST['report_id']) ? $_REQUEST['report_id'] : 0;
+  echo "<input type='hidden' name='report_id' value='".$report_id."' />\n";
+  $itemized_test_id = isset($_REQUEST['itemized_test_id']) ? $_REQUEST['itemized_test_id'] : 0;
+  echo "<input type='hidden' name='itemized_test_id' value='".$itemized_test_id."' />\n";
+  $numerator_label = isset($_REQUEST['numerator_label']) ? $_REQUEST['numerator_label'] : '';
+  echo "<input type='hidden' name='numerator_label' value='".$numerator_label."' />\n";
+  $pass_id = isset($_REQUEST['pass_id']) ? $_REQUEST['pass_id'] : "all";
+  echo "<input type='hidden' name='pass_id' value='".$pass_id."' />\n";
+  $print_patients = isset($_REQUEST['print_patients'])? $_REQUEST['print_patients'] : 0;
+  echo "<input type='hidden' name='print_patients' value='".$print_patients."' />\n";
+
+  // Collect patient listing from cdr report
+  if ($print_patients) {
+    // collect entire listing for printing
+    $result = collectItemizedPatientsCdrReport($report_id,$itemized_test_id,$pass_id,$numerator_label);
+    $GLOBALS['PATIENT_INC_COUNT'] = count($result);
+    $MAXSHOW = $GLOBALS['PATIENT_INC_COUNT'];
+  }
+  else {
+    // collect the total listing count
+    $GLOBALS['PATIENT_INC_COUNT'] = collectItemizedPatientsCdrReport($report_id,$itemized_test_id,$pass_id,$numerator_label,true);
+    // then just collect applicable list for pagination
+    $result = collectItemizedPatientsCdrReport($report_id,$itemized_test_id,$pass_id,$numerator_label,false,$sqllimit,$fstart);
+  }
+}
 else {
   $patient = $_REQUEST['patient'];
   $findBy  = $_REQUEST['findBy'];
@@ -208,10 +254,19 @@ else {
 <table border='0' cellpadding='5' cellspacing='0' width='100%'>
  <tr>
   <td class='text'>
-   <a href="./patient_select_help.php" target=_new>[<?php echo htmlspecialchars( xl('Help'), ENT_NOQUOTES); ?>]&nbsp</a>
+  <?php if ($from_page == "cdr_report") { ?>
+   <a href='../../reports/cqm.php?report_id=<?php echo attr($report_id) ?>' class='css_button' onclick='top.restoreSession()'><span><?php echo xlt("Return To Report Results"); ?></span></a>
+  <?php } else { ?>
+   <a href="./patient_select_help.php" target=_new onclick='top.restoreSession()'>[<?php echo htmlspecialchars( xl('Help'), ENT_NOQUOTES); ?>]&nbsp</a>
+  <?php } ?>
   </td>
   <td class='text' align='center'>
 <?php if ($message) echo "<font color='red'><b>".htmlspecialchars( $message, ENT_NOQUOTES)."</b></font>\n"; ?>
+  </td>
+  <td>
+   <?php if ($from_page == "cdr_report") { ?>
+    <?php echo "<a href='patient_select.php?from_page=cdr_report&pass_id=".attr($pass_id)."&report_id=".attr($report_id)."&itemized_test_id=".attr($itemized_test_id)."&numerator_label=".urlencode(attr($row['numerator_label']))."&print_patients=1' class='css_button' onclick='top.restoreSession()'><span>".xlt("Print Entire Listing")."</span></a>"; ?>
+   <?php } ?> &nbsp;
   </td>
   <td class='text' align='right'>
 <?php
@@ -228,7 +283,10 @@ if ($fend > $count) $fend = $count;
    </a>
    &nbsp;&nbsp;
 <?php } ?>
-   <?php echo ($fstart + 1) . htmlspecialchars( " - $fend of $count", ENT_NOQUOTES); ?>
+  <?php
+   $countStatement =  " - " . $fend . " " . xl('of') . " " . $count;
+   echo ($fstart + 1) . htmlspecialchars( $countStatement, ENT_NOQUOTES);
+  ?>
 <?php if ($count > $fend) { ?>
    &nbsp;&nbsp;
    <a href="javascript:submitList(<?php echo $MAXSHOW ?>)">
@@ -237,12 +295,35 @@ if ($fend > $count) $fend = $count;
 <?php } ?>
   </td>
  </tr>
+ <tr>
+   <?php if ($from_page == "cdr_report") {
+     echo "<td colspan='6' class='text'>";
+     echo "<b>";
+     if ($pass_id == "fail") {
+       echo xlt("Failed Patients");
+     }
+     else if ($pass_id == "pass") {
+       echo xlt("Passed Patients");
+     }
+     else if ($pass_id == "exclude") {
+       echo xlt("Excluded Patients");
+     }
+     else { // $pass_id == "all"
+       echo xlt("All Patients");
+     }
+     echo "</b>";
+     echo " - ";
+     echo collectItemizedRuleDisplayTitle($report_id,$itemized_test_id,$numerator_label);
+     echo "</td>";
+   } ?>
+ </tr>
 </table>
 
 <div id="searchResultsHeader">
 <table>
 <tr>
 <th class="srName"><?php echo htmlspecialchars( xl('Name'), ENT_NOQUOTES);?></th>
+<th class="srGender"><?php echo htmlspecialchars( xl('Sex'), ENT_NOQUOTES);?></th>
 <th class="srPhone"><?php echo htmlspecialchars( xl('Phone'), ENT_NOQUOTES);?></th>
 <th class="srSS"><?php echo htmlspecialchars( xl('SS'), ENT_NOQUOTES);?></th>
 <th class="srDOB"><?php echo htmlspecialchars( xl('DOB'), ENT_NOQUOTES);?></th>
@@ -270,7 +351,7 @@ else {
   // Alternate patient search results style; this gets address plus other
   // fields that are mandatory, up to a limit of 5.
   $extracols = array();
-  $tres = sqlStatement("SELECT field_id, title FROM layout_options " .
+  $tres = sqlStatement("SELECT * FROM layout_options " .
     "WHERE form_id = 'DEM' AND ( uor > 1 AND field_id != '' " .
     "OR uor > 0 AND field_id = 'street' ) AND " .
     "field_id NOT LIKE '_name' AND " .
@@ -281,7 +362,7 @@ else {
     "field_id NOT LIKE 'pubpid' " .
     "ORDER BY group_name, seq LIMIT 5");
   while ($trow = sqlFetchArray($tres)) {
-    $extracols[$trow['field_id']] = $trow['title'];
+    $extracols[$trow['field_id']] = $trow;
     echo "<th class='srMisc'>" . htmlspecialchars(xl($trow['title']), ENT_NOQUOTES) . "</th>\n";
   }
 }
@@ -300,6 +381,7 @@ if ($result) {
     foreach ($result as $iter) {
         echo "<tr class='oneresult' id='".htmlspecialchars( $iter['pid'], ENT_QUOTES)."'>";
         echo  "<td class='srName'>" . htmlspecialchars($iter['lname'] . ", " . $iter['fname']) . "</td>\n";
+        echo  "<td class='srGender'>" . text(getListItemTitle("sex",$iter['sex'])) . "</td>\n";
         //other phone number display setup for tooltip
         $phone_biz = '';
         if ($iter{"phone_biz"} != "") {
@@ -334,9 +416,9 @@ if ($result) {
           
           //setup for display of encounter date info
           $encounter_count = 0;
-          $day_diff = ''; 
-          $last_date_seen = ''; 
-          $next_appt_date= ''; 
+          $day_diff = '';
+          $last_date_seen = '';
+          $next_appt_date= '';
           $pid = '';
 
           // calculate date differences based on date of last encounter with billing entries
@@ -353,9 +435,9 @@ if ($result) {
                   "form_encounter.pid = ?";
           $statement= sqlStatement($query, array($iter{"pid"}) );
           if ($results = sqlFetchArray($statement)) {
-              $last_date_seen = $results['mydate']; 
+              $last_date_seen = $results['mydate'];
               $day_diff = $results['day_diff'];
-              $next_appt_date= $results['next_appt_day'].', '.$results['next_appt'];
+              $next_appt_date= xl($results['next_appt_day']).', '.$results['next_appt'];
           }
           // calculate date differences based on date of last encounter regardless of billing
           $query = "select DATE_FORMAT(max(form_encounter.date),'%m/%d/%y') as mydate," .
@@ -368,9 +450,9 @@ if ($result) {
                   " where form_encounter.pid = ?";
           $statement= sqlStatement($query, array($iter{"pid"}) );
           if ($results = sqlFetchArray($statement)) {
-              $last_date_seen = $results['mydate']; 
+              $last_date_seen = $results['mydate'];
               $day_diff = $results['day_diff'];
-              $next_appt_date= $results['next_appt_day'].', '.$results['next_appt'];
+              $next_appt_date= xl($results['next_appt_day']).', '.$results['next_appt'];
           }
 
           //calculate count of encounters by distinct billing dates with cpt4
@@ -398,8 +480,11 @@ if ($result) {
         }
 
         else { // alternate search results style
-          foreach ($extracols as $field_id => $title) {
-            echo "<td class='srMisc'>" . htmlspecialchars( $iter[$field_id], ENT_NOQUOTES) . "</td>\n";
+          foreach ($extracols as $field_id => $frow) {
+            echo "<td class='srMisc'>";
+            echo generate_display_field($frow, $iter[$field_id]);
+
+            echo"</td>\n";
           }
         }
     }
@@ -418,24 +503,22 @@ $(document).ready(function(){
     $(".oneresult").mouseout(function() { $(this).removeClass("highlight"); });
     $(".oneresult").click(function() { SelectPatient(this); });
     // $(".event").dblclick(function() { EditEvent(this); });
+    <?php if($print_patients) { ?>
+      var win = top.printLogPrint ? top : opener.top;
+      win.printLogPrint(window);
+    <?php } ?>
 });
 
 var SelectPatient = function (eObj) {
 <?php 
-// For the old layout we load a frameset that also sets up the new pid.
-// The new layout loads just the demographics frame here, which in turn
+// The layout loads just the demographics frame here, which in turn
 // will set the pid and load all the other frames.
-if ($GLOBALS['concurrent_layout']) {
     $newPage = "../../patient_file/summary/demographics.php?set_pid=";
     $target = "document";
-}
-else {
-    $newPage = "../../patient_file/patient_file.php?set_pid=";
-    $target = "top";
-}
 ?>
     objID = eObj.id;
     var parts = objID.split("~");
+    <?php if (!$popup) echo "top.restoreSession();\n"; ?>
     <?php if ($popup) echo "opener."; echo $target; ?>.location.href = '<?php echo $newPage; ?>' + parts[0];
     <?php if ($popup) echo "window.close();\n"; ?>
     return true;
@@ -445,4 +528,3 @@ else {
 
 </body>
 </html>
-

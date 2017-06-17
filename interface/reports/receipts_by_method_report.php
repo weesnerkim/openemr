@@ -1,27 +1,40 @@
 <?php
-// Copyright (C) 2006-2010 Rod Roark <rod@sunsetsystems.com>
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * This is a report of receipts by payer or payment method.
+ *
+ * The payer option means an insurance company name or "Patient".
+ *
+ * The payment method option is most useful for sites using
+ * pos_checkout.php (e.g. weight loss clinics) because this plugs
+ * a payment method like Cash, Check, VISA, etc. into the "source"
+ * column of the SQL-Ledger acc_trans table or ar_session table.
+ *
+ * Copyright (C) 2006-2016 Rod Roark <rod@sunsetsystems.com>
+ * Copyright (C) 2017 Brady Miller <brady.g.miller@gmail.com>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Rod Roark <rod@sunsetsystems.com>
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @link    http://www.open-emr.org
+ */
 
-// This is a report of receipts by payer or payment method.
-//
-// The payer option means an insurance company name or "Patient".
-//
-// The payment method option is most useful for sites using
-// pos_checkout.php (e.g. weight loss clinics) because this plugs
-// a payment method like Cash, Check, VISA, etc. into the "source"
-// column of the SQL-Ledger acc_trans table or ar_session table.
-
+use OpenEMR\Core\Header;
 require_once("../globals.php");
 require_once("$srcdir/patient.inc");
-require_once("$srcdir/sql-ledger.inc");
 require_once("$srcdir/acl.inc");
-require_once("$srcdir/formatting.inc.php");
 require_once "$srcdir/options.inc.php";
-require_once "$srcdir/formdata.inc.php";
+require_once("../../custom/code_types.inc.php");
 
 // This controls whether we show pt name, policy number and DOS.
 $showing_ppd = true;
@@ -164,20 +177,24 @@ function payerCmp($a, $b) {
 
 if (! acl_check('acct', 'rep')) die(xl("Unauthorized access."));
 
-$INTEGRATED_AR = $GLOBALS['oer_config']['ws_accounting']['enabled'] === 2;
-
-if (!$INTEGRATED_AR) SLConnect();
 
 $form_from_date = fixDate($_POST['form_from_date'], date('Y-m-d'));
 $form_to_date   = fixDate($_POST['form_to_date']  , date('Y-m-d'));
 $form_use_edate = $_POST['form_use_edate'];
 $form_facility  = $_POST['form_facility'];
 $form_report_by = $_POST['form_report_by'];
-$form_cptcode   = trim($_POST['form_cptcode']);
+$form_proc_codefull = trim($_POST['form_proc_codefull']);
+// Parse the code type and the code from <code_type>:<code>
+$tmp_code_array = explode(':',$form_proc_codefull);
+$form_proc_codetype = $tmp_code_array[0];
+$form_proc_code = $tmp_code_array[1];
+
 ?>
 <html>
 <head>
-<?php if (function_exists('html_header_show')) html_header_show(); ?>
+
+<?php Header::setupHeader(['datetime-picker', 'report-helper']); ?>
+
 <style type="text/css">
 /* specifically include & exclude from printing */
 @media print {
@@ -201,7 +218,52 @@ $form_cptcode   = trim($_POST['form_cptcode']);
         display: none;
     }
 }
+
+table.mymaintable, table.mymaintable td {
+ border: 1px solid #aaaaaa;
+ border-collapse: collapse;
+}
+table.mymaintable td {
+ padding: 1pt 4pt 1pt 4pt;
+}
 </style>
+
+<script language="JavaScript">
+
+$(document).ready(function() {
+  oeFixedHeaderSetup(document.getElementById('mymaintable'));
+  var win = top.printLogSetup ? top : opener.top;
+  win.printLogSetup(document.getElementById('printbutton'));
+
+  $('.datepicker').datetimepicker({
+    <?php $datetimepicker_timepicker = false; ?>
+    <?php $datetimepicker_showseconds = false; ?>
+    <?php $datetimepicker_formatInput = false; ?>
+    <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+    <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+  });
+});
+
+// This is for callback by the find-code popup.
+// Erases the current entry
+function set_related(codetype, code, selector, codedesc) {
+ var f = document.forms[0];
+ var s = f.form_proc_codefull.value;
+ if (code) {
+  s = codetype + ':' + code;
+ } else {
+  s = '';
+ }
+ f.form_proc_codefull.value = s;
+}
+
+// This invokes the find-code popup.
+function sel_procedure() {
+ dlgopen('../patient_file/encounter/find_code_popup.php?codetype=<?php echo attr(collect_codetypes("procedure","csv")) ?>', '_blank', 500, 400);
+}
+
+</script>
+
 <title><?xl('Receipts Summary','e')?></title>
 </head>
 
@@ -222,12 +284,12 @@ $form_cptcode   = trim($_POST['form_cptcode']);
 
 	<table class='text'>
 		<tr>
-			<td class='label'>
+			<td class='control-label'>
 			   <?php xl('Report by','e'); ?>
 			</td>
 			<td>
 				<?php
-				echo "   <select name='form_report_by'>\n";
+				echo "   <select name='form_report_by' class='form-control'>\n";
 				foreach (array(1 => 'Payer', 2 => 'Payment Method', 3 => 'Check Number') as $key => $value) {
 				  echo "    <option value='$key'";
 				  if ($key == $form_report_by) echo ' selected';
@@ -240,40 +302,37 @@ $form_cptcode   = trim($_POST['form_cptcode']);
 			<?php dropdown_facility(strip_escape_custom($form_facility), 'form_facility', false); ?>
 			</td>
 
-			<td>
-			   <?php if (!$GLOBALS['simplified_demographics']) echo '&nbsp;' . xl('CPT') . ':'; ?>
+			<td class='control-label'>
+			   <?php if (!$GLOBALS['simplified_demographics']) echo '&nbsp;' . xl('Procedure/Service') . ':'; ?>
 			</td>
 			<td>
-			   <input type='text' name='form_cptcode' size='5' value='<?php echo $form_cptcode; ?>'
-				title='<?php xl('Optional procedure code','e'); ?>'
+			   <input type='text' name='form_proc_codefull' class='form-control' size='12' value='<?php echo $form_proc_codefull; ?>' onclick='sel_procedure()'
+				title='<?php xl('Click to select optional procedure code','e'); ?>'
 				<?php if ($GLOBALS['simplified_demographics']) echo "style='display:none'"; ?> />
-			   &nbsp;<input type='checkbox' name='form_details' value='1'<?php if ($_POST['form_details']) echo " checked"; ?> /><?xl('Details','e')?>
+                                <br>
+          <div class="checkbox">
+			      <label><input type='checkbox' name='form_details' value='1'<?php if ($_POST['form_details']) echo " checked"; ?> /><?php echo xl('Details')?></label>
+          </div>
 			</td>
 		</tr>
 		<tr>
 			<td>&nbsp;</td>
 			<td>
-			   <select name='form_use_edate'>
+			   <select name='form_use_edate' class='form-control'>
 				<option value='0'><?php xl('Payment Date','e'); ?></option>
 				<option value='1'<?php if ($form_use_edate) echo ' selected' ?>><?php xl('Invoice Date','e'); ?></option>
 			   </select>
 			</td>
 			<td>
-			   <input type='text' name='form_from_date' id="form_from_date" size='10' value='<?php echo $form_from_date ?>'
-				onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)' title='yyyy-mm-dd'>
-			   <img src='../pic/show_calendar.gif' align='absbottom' width='24' height='22'
-				id='img_from_date' border='0' alt='[?]' style='cursor:pointer'
-				title='<?php xl('Click here to choose a date','e'); ?>'>
+			   <input type='text' class='datepicker form-control' name='form_from_date' id="form_from_date" size='10' value='<?php echo $form_from_date ?>'
+				title='yyyy-mm-dd'>
 			</td>
-			<td class='label'>
+			<td class='control-label'>
 			   <?php xl('To','e'); ?>:
 			</td>
 			<td>
-			   <input type='text' name='form_to_date' id="form_to_date" size='10' value='<?php echo $form_to_date ?>'
-				onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)' title='yyyy-mm-dd'>
-			   <img src='../pic/show_calendar.gif' align='absbottom' width='24' height='22'
-				id='img_to_date' border='0' alt='[?]' style='cursor:pointer'
-				title='<?php xl('Click here to choose a date','e'); ?>'>
+			   <input type='text' class='datepicker form-control' name='form_to_date' id="form_to_date" size='10' value='<?php echo $form_to_date ?>'
+				title='yyyy-mm-dd'>
 			</td>
 		</tr>
 	</table>
@@ -285,20 +344,17 @@ $form_cptcode   = trim($_POST['form_cptcode']);
 	<table style='border-left:1px solid; width:100%; height:100%' >
 		<tr>
 			<td>
-				<div style='margin-left:15px'>
-					<a href='#' class='css_button' onclick='$("#form_refresh").attr("value","true"); $("#theform").submit();'>
-					<span>
-						<?php xl('Submit','e'); ?>
-					</span>
-					</a>
-
-					<?php if ($_POST['form_refresh']) { ?>
-					<a href='#' class='css_button' onclick='window.print()'>
-						<span>
-							<?php xl('Print','e'); ?>
-						</span>
-					</a>
-					<?php } ?>
+				<div class="text-center">
+          <div class="btn-group" role="group">
+					  <a href='#' class='btn btn-default btn-save' onclick='$("#form_refresh").attr("value","true"); $("#theform").submit();'>
+						  <?php echo xlt('Submit'); ?>
+					  </a>
+					  <?php if ($_POST['form_refresh']) { ?>
+					    <a href='#' class='btn btn-default btn-print' id='printbutton'>
+							  <?php echo xlt('Print'); ?>
+					    </a>
+					  <?php } ?>
+          </div>
 				</div>
 			</td>
 		</tr>
@@ -314,17 +370,18 @@ $form_cptcode   = trim($_POST['form_cptcode']);
 ?>
 <div id="report_results">
 
-<table>
+<table width='98%' id='mymaintable' class='mymaintable'>
 
  <thead>
+ <tr bgcolor="#dddddd">
   <th>
-   <?xl('Method','e')?>
+   <?php xl('Method','e') ?>
   </th>
   <th>
-   <?xl('Date','e')?>
+   <?php xl('Date','e') ?>
   </th>
   <th>
-   <?xl('Invoice','e')?>
+   <?php xl('Invoice','e') ?>
   </th>
 <?php if ($showing_ppd) { ?>
   <th>
@@ -346,15 +403,10 @@ $form_cptcode   = trim($_POST['form_cptcode']);
   <th align="right">
    <?xl('Payments','e')?>
   </th>
+ </tr>
  </thead>
+ <tbody>
 <?php
-
-if (!$INTEGRATED_AR) {
-  $chart_id_cash = SLQueryValue("select id from chart where accno = '$sl_cash_acc'");
-  if ($sl_err) die($sl_err);
-  $chart_id_income = SLQueryValue("select id from chart where accno = '$sl_income_acc'");
-  if ($sl_err) die($sl_err);
-}
 
 if ($_POST['form_refresh']) {
   $from_date = $form_from_date;
@@ -367,13 +419,12 @@ if ($_POST['form_refresh']) {
   $methodadjtotal  = 0;
   $grandadjtotal  = 0;
 
-  if ($INTEGRATED_AR) {
 
     // Get co-pays using the encounter date as the pay date.  These will
     // always be considered patient payments.  Ignored if selecting by
     // billing code.
     //
-    if (!$form_cptcode) {
+    if (!$form_proc_code || !$form_proc_codetype) {
       $query = "SELECT b.fee, b.pid, b.encounter, b.code_type, " .
         "fe.date, fe.facility_id, fe.invoice_refno " .
         "FROM billing AS b " .
@@ -390,7 +441,7 @@ if ($_POST['form_refresh']) {
         thisLineItem($row['pid'], $row['encounter'], $row['code_text'],
           substr($row['date'], 0, 10), $rowmethod, 0 - $row['fee'], 0, 0, $row['invoice_refno']);
       }
-    } // end if not form_cptcode
+    } // end if not form_proc_code
 
     // Get all other payments and adjustments and their dates, corresponding
     // payers and check reference data, and the encounter dates separately.
@@ -414,7 +465,10 @@ if ($_POST['form_refresh']) {
         "a.post_time <= '$to_date 23:59:59' ) )";
     }
     // If a procedure code was specified.
-    if ($form_cptcode) $query .= " AND a.code LIKE '$form_cptcode%'";
+    if ($form_proc_code && $form_proc_codetype) {
+      // if a code_type is entered into the ar_activity table, then use it. If it is not entered in, then do not use it.
+      $query .= " AND ( a.code_type = '$form_proc_codetype' OR a.code_type = '' ) AND a.code LIKE '$form_proc_code%'";
+    }
     // If a facility was specified.
     if ($form_facility) $query .= " AND fe.facility_id = '$form_facility'";
     //
@@ -459,85 +513,6 @@ if ($_POST['form_refresh']) {
         $rowmethod, $row['pay_amount'], $row['adj_amount'], $row['payer_type'],
         $row['invoice_refno']);
     }
-  } // end $INTEGRATED_AR
-  else {
-    $query = "SELECT acc_trans.amount, acc_trans.transdate, acc_trans.memo, " .
-      "replace(acc_trans.source, 'InvAdj ', '') AS source, " .
-      "acc_trans.chart_id, ar.invnumber, ar.employee_id, ar.notes " .
-      "FROM acc_trans, ar WHERE " .
-      "( acc_trans.chart_id = $chart_id_cash OR " .
-      "( acc_trans.chart_id = $chart_id_income AND " .
-      "acc_trans.source LIKE 'InvAdj %' ) ) AND " .
-      "ar.id = acc_trans.trans_id AND ";
-    if ($form_cptcode) {
-      $query .= "acc_trans.memo ILIKE '$form_cptcode%' AND ";
-    }
-    if ($form_use_edate) {
-      $query .= "ar.transdate >= '$from_date' AND " .
-      "ar.transdate <= '$to_date'";
-    } else {
-      $query .= "acc_trans.transdate >= '$from_date' AND " .
-      "acc_trans.transdate <= '$to_date'";
-    }
-    $query .= " ORDER BY source, acc_trans.transdate, ar.invnumber, acc_trans.memo";
-
-    // echo "<!-- $query -->\n";
-
-    $t_res = SLQuery($query);
-    if ($sl_err) die($sl_err);
-
-    for ($irow = 0; $irow < SLRowCount($t_res); ++$irow) {
-      $row = SLGetRow($t_res, $irow);
-      list($patient_id, $encounter_id) = explode(".", $row['invnumber']);
-
-      // If a facility was specified then skip invoices whose encounters
-      // do not indicate that facility.
-      if ($form_facility) {
-        $tmp = sqlQuery("SELECT count(*) AS count FROM form_encounter WHERE " .
-          "pid = '$patient_id' AND encounter = '$encounter_id' AND " .
-          "facility_id = '$form_facility'");
-        if (empty($tmp['count'])) continue;
-      }
-
-      $rowpayamount = 0 - $row['amount'];
-      $rowadjamount = 0;
-      if ($row['chart_id'] == $chart_id_income) {
-        $rowadjamount = $rowpayamount;
-        $rowpayamount = 0;
-      }
-
-      // Compute reporting key: insurance company name or payment method.
-      $payer_type = 0; // will be 0=pt, 1=ins1, 2=ins2 or 3=ins3
-      if ($form_report_by == '1') {
-        $rowmethod = '';
-        $rowsrc = strtolower($row['source']);
-        $insgot = strtolower($row['notes']);
-        foreach (array('ins1', 'ins2', 'ins3') as $value) {
-          if (strpos($rowsrc, $value) !== false) {
-            $i = strpos($insgot, $value);
-            if ($i !== false) {
-              $j = strpos($insgot, "\n", $i);
-              if (!$j) $j = strlen($insgot);
-              $payer_type = 0 + substr($value, 3);
-              $rowmethod = trim(substr($row['notes'], $i + 5, $j - $i - 5));
-              break;
-            }
-          }
-        } // end foreach
-      } // end reporting by payer
-      else {
-        $rowmethod = trim($row['source']);
-        if ($form_report_by != '3') {
-          // Extract only the first word as the payment method because any
-          // following text will be some petty detail like a check number.
-          $rowmethod = substr($rowmethod, 0, strcspn($rowmethod, ' /'));
-        }
-      } // end reporting by method
-
-      thisLineItem($patient_id, $encounter_id, $row['memo'], $row['transdate'],
-        $rowmethod, $rowpayamount, $rowadjamount, $payer_type);
-    } // end for
-  } // end not $INTEGRATED_AR
 
   // Not payer summary.
   if ($form_report_by != '1' || $_POST['form_details']) {
@@ -573,7 +548,7 @@ if ($_POST['form_refresh']) {
 ?>
  <tr bgcolor="#ddddff">
   <td class="detail" colspan="<?php echo $showing_ppd ? 7 : 4; ?>">
-   <?echo xl('Total for ') . $paymethod ?>
+   <?php echo xl('Total for ') . $paymethod ?>
   </td>
   <td align="right">
    <?php bucks($methodadjtotal) ?>
@@ -620,9 +595,9 @@ if ($_POST['form_refresh']) {
 
 <?php
 } // end form refresh
-if (!$INTEGRATED_AR) SLClose();
 ?>
 
+ </tbody>
 </table>
 </div>
 <?php } else { ?>
@@ -633,17 +608,5 @@ if (!$INTEGRATED_AR) SLClose();
 
 </form>
 </body>
-
-<!-- stuff for the popup calendar -->
-<link rel='stylesheet' href='<?php echo $css_header ?>' type='text/css'>
-<style type="text/css">@import url(../../library/dynarch_calendar.css);</style>
-<script type="text/javascript" src="../../library/dynarch_calendar.js"></script>
-<?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
-<script type="text/javascript" src="../../library/dynarch_calendar_setup.js"></script>
-<script type="text/javascript" src="../../library/js/jquery.1.3.2.js"></script>
-<script language="Javascript">
- Calendar.setup({inputField:"form_from_date", ifFormat:"%Y-%m-%d", button:"img_from_date"});
- Calendar.setup({inputField:"form_to_date", ifFormat:"%Y-%m-%d", button:"img_to_date"});
-</script>
 
 </html>

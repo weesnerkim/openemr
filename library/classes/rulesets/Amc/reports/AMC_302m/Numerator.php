@@ -1,5 +1,5 @@
 <?php
-// Copyright (C) 2011 Brady Miller <brady@sparmy.com>
+// Copyright (C) 2011 Brady Miller <brady.g.miller@gmail.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -15,13 +15,13 @@ class AMC_302m_Numerator implements AmcFilterIF
         return "AMC_302m Numerator";
     }
     
-    public function test( AmcPatient $patient, $beginDate, $endDate ) 
+    public function test( AmcPatient $patient, $beginDate, $endDate )
     {
         // Is patient provided patient specific education during the report period.
 
         // Check for any patient specific education instances.
         $item = sqlQuery("SELECT * FROM `amc_misc_data` as amc, `form_encounter` as enc " .
-                         "WHERE enc.pid = amc.pid = ? " .
+                         "WHERE enc.pid = amc.pid AND enc.pid = ? " .
                          "AND amc.map_category = 'form_encounter' " .
                          "AND enc.encounter = amc.map_id " .
                          "AND `amc_id` = 'patient_edu_amc' " .

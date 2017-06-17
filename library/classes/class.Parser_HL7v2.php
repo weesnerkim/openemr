@@ -13,7 +13,7 @@ class Parser_HL7v2 {
 	var $MSH;
 	var $EVN;
 
-	function Parser_HL7v2 ( $message, $_options = NULL ) {
+	function __construct ( $message, $_options = NULL ) {
 		// Assume separator is a pipe
 		$this->message = $message;
 		$this->field_separator = '|';
@@ -63,7 +63,7 @@ class Parser_HL7v2 {
 				break;
 			} // end switch type
 		}
-		
+
 		// Depending on message type, handle differently
 		switch ($this->message_type) {
 			default:
@@ -124,7 +124,7 @@ class Parser_HL7v2 {
 				print "composite[$k] = ".prepare($v)."<br/>\n";
 			}
 		}
-		
+
 		// Assign values
 		list (
 			$__garbage, // Skip index [0], it's the separator
@@ -173,14 +173,14 @@ class Parser_HL7v2 {
 				$composites[$key] = $this->__parse_composite($composite);
 			}
 		}
-		
+
 		$pos = 0;
 
 		// Find out where we are
 		if (is_array($this->message[$type])) {
 			$pos = count($this->message[$type]);
 		}
-		
+
 		//Ramesh Nagul - EnSoftek commented line out as it is throwing an error in parsing.
 		//$this->message[$type][$pos] = $composites;
 		// Add parsed segment to message
@@ -195,11 +195,11 @@ class Parser_HL7v2 {
 	function __parse_segment ($segment) {
 		return explode($this->field_separator, $segment);
 	} // end method __parse_segment
-	
+
 	function composite_array() {
 		$cmp = array();
 		$cmp["MSH"] = $this->MSH;
-		$cmp["EVN"] = $this->EVN;	
+		$cmp["EVN"] = $this->EVN;
 		return $cmp;
 	}
 } // end class Parser_HL7v2

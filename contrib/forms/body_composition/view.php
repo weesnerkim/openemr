@@ -32,7 +32,7 @@ if (! $encounter) { // comes from globals.php
 // encode a string from a form field for database writing.
 function form2db($fldval) {
  $fldval = trim($fldval);
- if (!get_magic_quotes_gpc()) $fldval = addslashes($fldval);
+ $fldval = formDataCore($fldval);
  return $fldval;
 }
 
@@ -129,12 +129,12 @@ else {
 <html>
 <head>
 <?php html_header_show();?>
-<link rel=stylesheet href="<?echo $css_header;?>" type="text/css">
+<link rel=stylesheet href="<?php echo $css_header;?>" type="text/css">
 <script language="JavaScript">
 </script>
 </head>
 
-<body <?echo $top_bg_line;?> topmargin="0" rightmargin="0" leftmargin="2" bottommargin="0" marginwidth="2" marginheight="0">
+<body <?php echo $top_bg_line;?> topmargin="0" rightmargin="0" leftmargin="2" bottommargin="0" marginwidth="2" marginheight="0">
 <form method="post" action="<?php echo $rootdir ?>/forms/body_composition/new.php?id=<?php echo $formid ?>"
  onsubmit="return top.restoreSession()">
 

@@ -1,24 +1,37 @@
 <?php
-// Copyright (C) 2011 Ensoftek Inc.
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * This report lists  patient immunizations for a given date range.
+ *
+ * Copyright (C) 2011 Ensoftek Inc.
+ * Copyright (C) 2017 Brady Miller <brady.g.miller@gmail.com>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @link    http://www.open-emr.org
+ */
 
-// This report lists  patient immunizations for a given date range.
-
+use OpenEMR\Core\Header;
 require_once("../globals.php");
 require_once("$srcdir/patient.inc");
-require_once("$srcdir/formatting.inc.php");
 
 if(isset($_POST['form_from_date'])) {
-  $from_date = $_POST['form_from_date'] !== "" ? 
+  $from_date = $_POST['form_from_date'] !== "" ?
     fixDate($_POST['form_from_date'], date('Y-m-d')) :
     0;
 }
 if(isset($_POST['form_to_date'])) {
-  $to_date =$_POST['form_to_date'] !== "" ? 
+  $to_date =$_POST['form_to_date'] !== "" ?
     fixDate($_POST['form_to_date'], date('Y-m-d')) :
     0;
 }
@@ -41,9 +54,9 @@ function tr($a) {
 function format_cvx_code($cvx_code) {
 
 	if ( $cvx_code < 10 ) {
-		return "0$cvx_code"; 
+		return "0$cvx_code";
 	}
-	
+
 	return $cvx_code;
 }
 
@@ -75,13 +88,13 @@ function format_ethnicity($ethnicity) {
  }
 
 
-  $query = 
+  $query =
   "select " .
   "i.patient_id as patientid, " .
   "p.language, ".
   "i.cvx_code , " ;
   if ($_POST['form_get_hl7']==='true') {
-    $query .= 
+    $query .=
       "DATE_FORMAT(p.DOB,'%Y%m%d') as DOB, ".
       "concat(p.street, '^^', p.city, '^', p.state, '^', p.postal_code) as address, ".
       "p.country_code, ".
@@ -90,8 +103,8 @@ function format_ethnicity($ethnicity) {
       "p.status, ".
       "p.sex, ".
       "p.ethnoracial, ".
-      "p.race, ". 
-      "p.ethnicity, ".   
+      "p.race, ".
+      "p.ethnicity, ".
       "c.code_text, ".
       "c.code, ".
       "c.code_type, ".
@@ -124,10 +137,13 @@ function format_ethnicity($ethnicity) {
   }
   $query .= "i.patient_id=p.pid and ".
   $query_codes .
-  "i.cvx_code = c.code ";
+  "i.cvx_code = c.code and ";
+
+  //do not show immunization added erroneously
+  $query .=  "i.added_erroneously = 0";
 
 //echo "<p> DEBUG query: $query </p>\n"; // debugging
-  
+
 
 $D="\r";
 $nowdate = date('Ymd');
@@ -137,7 +153,7 @@ $filename = "imm_reg_". $now . ".hl7";
 
 // GENERATE HL7 FILE
 if ($_POST['form_get_hl7']==='true') {
-	$content = ''; 
+	$content = '';
 
   $res = sqlStatement($query);
 
@@ -156,7 +172,7 @@ if ($_POST['form_get_hl7']==='true') {
     $content .= "PID|" . // [[ 3.72 ]]
         "|" . // 1. Set id
         "|" . // 2. (B)Patient id
-        $r['patientid']. "^^^MPI&2.16.840.1.113883.19.3.2.1&ISO^MR" . "|". // 3. (R) Patient indentifier list. TODO: Hard-coded the OID from NIST test. 
+        $r['patientid']. "^^^MPI&2.16.840.1.113883.19.3.2.1&ISO^MR" . "|". // 3. (R) Patient indentifier list. TODO: Hard-coded the OID from NIST test.
         "|" . // 4. (B) Alternate PID
         $r['patientname']."|" . // 5.R. Name
         "|" . // 6. Mather Maiden Name
@@ -195,10 +211,10 @@ if ($_POST['form_get_hl7']==='true') {
         ""  . // 39. Tribal Citizenship
         "$D" ;
     $content .= "ORC" . // ORC mandatory for RXA
-        "|" . 
+        "|" .
         "RE" .
         "$D" ;
-    $content .= "RXA|" . 
+    $content .= "RXA|" .
         "0|" . // 1. Give Sub-ID Counter
         "1|" . // 2. Administrattion Sub-ID Counter
     	$r['administered_date']."|" . // 3. Date/Time Start of Administration
@@ -221,7 +237,7 @@ if ($_POST['form_get_hl7']==='true') {
         "|" . // 20.Completion Status
         "A" . // 21.Action Code - RXA
         "$D" ;
-        
+
 }
 
   // send the header here
@@ -236,20 +252,29 @@ if ($_POST['form_get_hl7']==='true') {
 
 <html>
 <head>
-<?php html_header_show();?>
+
 <title><?php xl('Immunization Registry','e'); ?></title>
-<style type="text/css">@import url(../../library/dynarch_calendar.css);</style>
-<script type="text/javascript" src="../../library/dialog.js"></script>
-<script type="text/javascript" src="../../library/textformat.js"></script>
-<script type="text/javascript" src="../../library/dynarch_calendar.js"></script>
-<?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
-<script type="text/javascript" src="../../library/dynarch_calendar_setup.js"></script>
-<script type="text/javascript" src="../../library/js/jquery.1.3.2.js"></script>
+
+<?php Header::setupHeader(['datetime-picker', 'report-helper']); ?>
+
 <script language="JavaScript">
 <?php require($GLOBALS['srcdir'] . "/restoreSession.php"); ?>
+
+ $(document).ready(function() {
+  var win = top.printLogSetup ? top : opener.top;
+  win.printLogSetup(document.getElementById('printbutton'));
+
+  $('.datepicker').datetimepicker({
+   <?php $datetimepicker_timepicker = false; ?>
+   <?php $datetimepicker_showseconds = false; ?>
+   <?php $datetimepicker_formatInput = false; ?>
+   <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+   <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+  });
+ });
+
 </script>
 
-<link rel='stylesheet' href='<?php echo $css_header ?>' type='text/css'>
 <style type="text/css">
 /* specifically include & exclude from printing */
 @media print {
@@ -298,7 +323,7 @@ onsubmit='return top.restoreSession()'>
     <div style='float:left'>
       <table class='text'>
         <tr>
-          <td class='label'>
+          <td class='control-label'>
             <?php xl('Codes','e'); ?>:
           </td>
           <td>
@@ -309,7 +334,7 @@ onsubmit='return top.restoreSession()'>
    " left join code_types ct on codes.code_type = ct.ct_id ".
    " where ct.ct_key='CVX' ORDER BY name";
  $cres = sqlStatement($query1);
- echo "   <select multiple='multiple' size='3' name='form_code[]'>\n";
+ echo "   <select multiple='multiple' size='3' name='form_code[]' class='form-control'>\n";
  //echo "    <option value=''>-- " . xl('All Codes') . " --\n";
  while ($crow = sqlFetchArray($cres)) {
   $codeid = $crow['id'];
@@ -320,31 +345,23 @@ onsubmit='return top.restoreSession()'>
  echo "   </select>\n";
 ?>
           </td>
-          <td class='label'>
+          <td class='control-label'>
             <?php xl('From','e'); ?>:
           </td>
           <td>
             <input type='text' name='form_from_date' id="form_from_date"
+            class='datepicker form-control'
             size='10' value='<?php echo $form_from_date ?>'
-            onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)' 
             title='yyyy-mm-dd'>
-            <img src='../pic/show_calendar.gif' align='absbottom' 
-            width='24' height='22' id='img_from_date' border='0' 
-            alt='[?]' style='cursor:pointer'
-            title='<?php xl('Click here to choose a date','e'); ?>'>
           </td>
-          <td class='label'>
+          <td class='control-label'>
             <?php xl('To','e'); ?>:
           </td>
           <td>
-            <input type='text' name='form_to_date' id="form_to_date" 
+            <input type='text' name='form_to_date' id="form_to_date"
+            class='datepicker form-control'
             size='10' value='<?php echo $form_to_date ?>'
-            onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)' 
             title='yyyy-mm-dd'>
-            <img src='../pic/show_calendar.gif' align='absbottom' 
-            width='24' height='22' id='img_to_date' border='0' 
-            alt='[?]' style='cursor:pointer'
-            title='<?php xl('Click here to choose a date','e'); ?>'>
           </td>
         </tr>
       </table>
@@ -354,33 +371,29 @@ onsubmit='return top.restoreSession()'>
     <table style='border-left:1px solid; width:100%; height:100%' >
       <tr>
         <td>
-          <div style='margin-left:15px'>
-            <a href='#' class='css_button' 
-            onclick='
-            $("#form_refresh").attr("value","true"); 
-            $("#form_get_hl7").attr("value","false"); 
-            $("#theform").submit();
-            '>
-            <span>
-              <?php xl('Refresh','e'); ?>
-            </spain>
-            </a>
-            <?php if ($_POST['form_refresh']) { ?>
-              <a href='#' class='css_button' onclick='window.print()'>
-                <span>
-                  <?php xl('Print','e'); ?>
-                </span>
+          <div class="text-center">
+            <div class="btn-group" role="group">
+              <a href='#' class='btn btn-default btn-save'
+                onclick='
+                $("#form_refresh").attr("value","true");
+                $("#form_get_hl7").attr("value","false");
+                $("#theform").submit();
+                '>
+              <?php echo xlt('Refresh'); ?>
               </a>
-              <a href='#' class='css_button' onclick=
-              "if(confirm('<?php xl('This step will generate a file which you have to save for future use. The file cannot be generated again. Do you want to proceed?','e'); ?>')) {
-                     $('#form_get_hl7').attr('value','true'); 
-                     $('#theform').submit();
-              }">
-                <span>
-                  <?php xl('Get HL7','e'); ?>
-                </span>
-              </a>
-            <?php } ?>
+              <?php if ($_POST['form_refresh']) { ?>
+                <a href='#' class='btn btn-default btn-print' id='printbutton'>
+                  <?php echo xlt('Print'); ?>
+                </a>
+                <a href='#' class='btn btn-default btn-transmit' onclick=
+                  "if(confirm('<?php echo xls('This step will generate a file which you have to save for future use. The file cannot be generated again. Do you want to proceed?'); ?>')) {
+                    $('#form_get_hl7').attr('value','true');
+                    $('#theform').submit();
+                    }">
+                  <?php echo xlt('Get HL7'); ?>
+                </a>
+              <?php } ?>
+            </div>
           </div>
         </td>
       </tr>
@@ -450,11 +463,6 @@ onsubmit='return top.restoreSession()'>
 </div>
 <?php } ?>
 </form>
-
-<script language='JavaScript'>
- Calendar.setup({inputField:"form_from_date", ifFormat:"%Y-%m-%d", button:"img_from_date"});
- Calendar.setup({inputField:"form_to_date", ifFormat:"%Y-%m-%d", button:"img_to_date"});
-</script>
 
 </body>
 </html>

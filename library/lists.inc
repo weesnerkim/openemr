@@ -1,48 +1,89 @@
 <?php
-require_once("{$GLOBALS['srcdir']}/sql.inc");
+/**
+ * Issue list functions and data structure building.
+ *
+ * The data structure is the $ISSUE_TYPES array.
+ * The $ISSUE_TYPES array is built from the issue_types sql table and provides
+ * abstraction of issue types to allow customization.
+ * <pre>Attributes of the $ISSUE_TYPES array are:
+ *  key - The identifier. (Do NOT create element with token 'prescription_erx' since this is reserved by NewCropRx Module that leverages lists_touch table to support MU calculations)
+ *  0   - The plural title.
+ *  1   - The singular title.
+ *  2   - The abbreviated title (one letter abbreviation). 
+ *  3   - Style ('0 - Normal; 1 - Simplified: only title, start date, comments and an Active checkbox;no diagnosis, occurrence, end date, referred-by or sports fields.; 2 - Football Injury; 3 and 4 are IPPF specific)
+ *  4   - Force show this issue category in the patient summary screen even if empty (setting to 1 will force it to show and setting it to 0 will turn this off).
+ *  5   - ACO for this type, for example "patients|med".
+ *
+ * Note there is a mechanism to show whether a category is explicitly set to
+ * 'Nothing' via the getListTouch() and setListTouch() functions that store
+ * applicable information in the lists_touch sql table.
+ *
+ *  </pre>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Rod Roark <rod@sunsetsystems.com>
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @author  Teny <teny@zhservices.com>
+ * @link    http://www.open-emr.org
+ */
 
-if (!empty($GLOBALS['ippf_specific'])) {
-  $ISSUE_TYPES = array(
-    // table type               plural                 singular          abbrev style
-    'medical_problem' => array(xl('Medical Problems'),xl('Problem')      ,xl('P'),0),
-    'allergy'         => array(xl('Allergies')       ,xl('Allergy')      ,xl('Y'),0),
-    'medication'      => array(xl('Medications')     ,xl('Medication')   ,xl('M'),0),
-    'surgery'         => array(xl('Surgeries')       ,xl('Surgery')      ,xl('S'),0),
-    'ippf_gcac'       => array(xl('Abortions')       ,xl('Abortion')     ,xl('A'),3),
-    'contraceptive'   => array(xl('Contraception')   ,xl('Contraception'),xl('C'),4),
-//  'ippf_srh'        => array(xl('SRH')             ,xl('SRH')          ,xl('R'),5),
-  );
-}
-else if (!empty($GLOBALS['athletic_team'])) {
-  $ISSUE_TYPES = array(
-    'football_injury' => array(xl('Football Injuries'),xl('Injury') ,xl('I'),2),
-    'medical_problem' => array(xl('Medical Problems') ,xl('Medical'),xl('P'),0),
-    'allergy'         => array(xl('Allergies')        ,xl('Allergy'),xl('A'),1),
-    'general'         => array(xl('General')          ,xl('General'),xl('G'),1),
-  );
-}
-else { // default version
-  $ISSUE_TYPES = array(
-    // table type                plural                 singular    abbrev style
-    'medical_problem' => array(xl('Medical Problems'),xl('Problem')   ,xl('P'),0),
-    'allergy'         => array(xl('Allergies')       ,xl('Allergy')   ,xl('A'),0),
-    'medication'      => array(xl('Medications')     ,xl('Medication'),xl('M'),0),
-    'surgery'         => array(xl('Surgeries')       ,xl('Surgery')   ,xl('S'),0),
-    'dental'          => array(xl('Dental Issues')   ,xl('Dental')    ,xl('D'),0),
-    //
-    // Styles are:
-    // 0 - Normal, as in 2.8.1.
-    // 1 - Simplified: only title, start date, comments and an Active checkbox;
-    //     no diagnosis, occurrence, end date, referred-by or sports fields.
-    //     Internally we'll still use a null end date to indicate active.
-    // 2 - Football Injury.
-    //
-  );
+// Build the $ISSUE_TYPE_CATEGORIES array
+// First, set the hard-coded options
+$ISSUE_TYPE_CATEGORIES = array(
+  'default' => xl('Default'),             // Normal OpenEMR use
+  'ippf_specific' => xl('IPPF')           // For IPPF use
+);
+// Second, collect the non hard-coded options and add to the array
+$res = sqlStatement("SELECT DISTINCT `category` FROM `issue_types`");
+while($row = sqlFetchArray($res)){
+  if ( ($row['category'] == "default") || ($row['category'] == "ippf_specific") ) continue;
+  $ISSUE_TYPE_CATEGORIES[$row['category']] = $row['category'];
 }
 
-//
-// 06/2009 - BM Migrated the ISSUE_OCCURRENCES to list_options
-//
+$ISSUE_TYPE_STYLES = array(
+  0 => xl('Standard'),                    // Standard
+  1 => xl('Simplified'),                  // Simplified: only title, start date, comments and an Active checkbox;no diagnosis, occurrence, end date, referred-by or sports fields.
+  2 => xl('Football Injury'),             // Football Injury
+  3 => xl('IPPF Abortion'),               // IPPF specific (abortions issues)
+  4 => xl('IPPF Contraception')           // IPPF specific (contraceptions issues)
+);
+
+/**
+ * Will return the current issue type category that is being used.
+ * @return  string  The current issue type category that is being used.
+ */
+function collect_issue_type_category() {
+  if (!empty($GLOBALS['ippf_specific'])) { // IPPF version
+    return "ippf_specific";
+  }
+  else { // Default version
+    return "default";
+  }
+}
+
+// Build the $ISSUE_TYPES array (see script header for description)
+$res = sqlStatement("SELECT * FROM `issue_types` WHERE active = 1 AND `category`=? ORDER BY `ordering`",
+  array(collect_issue_type_category()));
+while($row = sqlFetchArray($res)){
+  $ISSUE_TYPES[$row['type']] = array(
+    xl($row['plural']),
+    xl($row['singular']),
+    xl($row['abbreviation']),
+    $row['style'],
+    $row['force_show'],
+    $row['aco_spec']);
+}
 
 $ISSUE_CLASSIFICATIONS = array(
   0   => xl('Unknown or N/A'),
@@ -64,12 +105,10 @@ function getListByType ($pid, $type, $cols = "*", $active = "all", $limit = "all
 	if ($limit != "all")
 		$sql .= " limit $offset,$limit";
 	
-
 	$res = sqlStatement($sql);
 	for($iter =0;$row = sqlFetchArray($res);$iter++)
 		$all[$iter] = $row;
 	return $all;
-
 }
 
 function addList ($pid, $type, $title, $comments, $activity = "1")

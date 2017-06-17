@@ -1,12 +1,10 @@
 <?php
 require_once("../globals.php");
 require_once("../../library/acl.inc");
-require_once("$srcdir/sha1.js");
-require_once("$srcdir/sql.inc");
-require_once("$srcdir/formdata.inc.php");
 require_once("$srcdir/options.inc.php");
-require_once(dirname(__FILE__) . "/../../library/classes/WSProvider.class.php");
 require_once("$srcdir/erx_javascript.inc.php");
+
+$facilityService = new \services\FacilityService();
 
 $alertmsg = '';
 
@@ -17,13 +15,36 @@ $alertmsg = '';
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
 <link rel="stylesheet" type="text/css" href="<?php echo $GLOBALS['webroot'] ?>/library/js/fancybox/jquery.fancybox-1.2.6.css" media="screen" />
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js"></script>
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery.1.3.2.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative'] ?>/jquery-min-1-9-1/index.js"></script>
 <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/common.js"></script>
 <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/fancybox/jquery.fancybox-1.2.6.js"></script>
+
 <script src="checkpwd_validation.js" type="text/javascript"></script>
 
+<!-- validation library -->
+<!--//Not lbf forms use the new validation, please make sure you have the corresponding values in the list Page validation-->
+<?php    $use_validate_js = 1;?>
+<?php  require_once($GLOBALS['srcdir'] . "/validation/validation_script.js.php"); ?>
+<?php
+//Gets validation rules from Page Validation list.
+//Note that for technical reasons, we are bypassing the standard validateUsingPageRules() call.
+$collectthis = collectValidationPageRules("/interface/usergroup/usergroup_admin_add.php");
+if (empty($collectthis)) {
+    $collectthis = "undefined";
+}
+else {
+    $collectthis = $collectthis["new_user"]["rules"];
+}
+?>
 <script language="JavaScript">
+
+/*
+* validation on the form with new client side validation (using validate.js).
+* this enable to add new rules for this form in the pageValidation list.
+* */
+var collectvalidation = <?php echo($collectthis); ?>;
+
 function trimAll(sString)
 {
 	while (sString.substring(0,1) == ' ')
@@ -35,100 +56,76 @@ function trimAll(sString)
 		sString = sString.substring(0,sString.length-1);
 	}
 	return sString;
-} 
+}
 
 function submitform() {
-	if (document.forms[0].rumple.value.length>0 && document.forms[0].stiltskin.value.length>0 && document.getElementById('fname').value.length >0 && document.getElementById('lname').value.length >0) {
-		top.restoreSession();
 
-		//Checking if secure password is enabled or disabled.
-		//If it is enabled and entered password is a weak password, alert the user to enter strong password.
-		if(document.new_user.secure_pwd.value == 1){
-			var password = trim(document.new_user.stiltskin.value);
-			if(password != "") {
-				var pwdresult = passwordvalidate(password);
-				if(pwdresult == 0){
-					alert("<?php echo xl('The password must be at least eight characters, and should'); echo '\n'; echo xl('contain at least three of the four following items:'); echo '\n'; echo xl('A number'); echo '\n'; echo xl('A lowercase letter'); echo '\n'; echo xl('An uppercase letter'); echo '\n'; echo xl('A special character');echo '('; echo xl('not a letter or number'); echo ').'; echo '\n'; echo xl('For example:'); echo ' healthCare@09'; ?>");
-					return false;
-				}
-			}
-		} //secure_pwd if ends here
-		// ViCareplus : As per NIST standard, SHA1 encryption algorithm is used		
-		document.forms[0].newauthPass.value=SHA1(document.forms[0].stiltskin.value);
-		document.forms[0].stiltskin.value='';
-		<?php if($GLOBALS['erx_enable']){ ?>
-		alertMsg='';
-		f=document.forms[0];
-		for(i=0;i<f.length;i++){
-			if(f[i].type=='text' && f[i].value)
-			{
-				if(f[i].name == 'rumple')
-				{
-					alertMsg += checkLength(f[i].name,f[i].value,35);
-					alertMsg += checkUsername(f[i].name,f[i].value);
-				}
-				else if(f[i].name == 'fname' || f[i].name == 'mname' || f[i].name == 'lname')
-				{
-					alertMsg += checkLength(f[i].name,f[i].value,35);
-					alertMsg += checkUsername(f[i].name,f[i].value);
-				}
-				else if(f[i].name == 'federaltaxid')
-				{
-					alertMsg += checkLength(f[i].name,f[i].value,10);
-					alertMsg += checkFederalEin(f[i].name,f[i].value);
-				}
-				else if(f[i].name == 'state_license_number')
-				{
-					alertMsg += checkLength(f[i].name,f[i].value,10);
-					alertMsg += checkStateLicenseNumber(f[i].name,f[i].value);
-				}
-				else if(f[i].name == 'npi')
-				{
-					alertMsg += checkLength(f[i].name,f[i].value,35);
-					alertMsg += checkTaxNpiDea(f[i].name,f[i].value);
-				}
-				else if(f[i].name == 'federaldrugid')
-				{
-					alertMsg += checkLength(f[i].name,f[i].value,30);
-					alertMsg += checkAlphaNumeric(f[i].name,f[i].value);
-				}
-			}
-		}
-		if(alertMsg)
-		{
-			alert(alertMsg);
-			return false;
-		}
-		<?php } ?>
-		document.forms[0].submit();
-	} else {
-		if (document.forms[0].rumple.value.length<=0)
-		{
-			document.forms[0].rumple.style.backgroundColor="red";
-			alert("<?php xl('Required field missing: Please enter the User Name','e');?>");
-			document.forms[0].rumple.focus();
-			return false;
-		}
-		if (document.forms[0].stiltskin.value.length<=0)
-		{
-			document.forms[0].stiltskin.style.backgroundColor="red";
-			alert("<?php echo xl('Please enter the password'); ?>");
-			document.forms[0].stiltskin.focus();
-			return false;
-		}
-		if(trimAll(document.getElementById('fname').value) == ""){
-			document.getElementById('fname').style.backgroundColor="red";
-			alert("<?php xl('Required field missing: Please enter the First name','e');?>");
-			document.getElementById('fname').focus();
-			return false;
-		}
-		if(trimAll(document.getElementById('lname').value) == ""){
-			document.getElementById('lname').style.backgroundColor="red";
-			alert("<?php xl('Required field missing: Please enter the Last name','e');?>");
-			document.getElementById('lname').focus();
-			return false;
-		}
-	}
+    var valid = submitme(1, undefined, 'new_user', collectvalidation);
+    if (!valid) return;
+
+   top.restoreSession();
+
+   //Checking if secure password is enabled or disabled.
+   //If it is enabled and entered password is a weak password, alert the user to enter strong password.
+   if(document.new_user.secure_pwd.value == 1){
+      var password = trim(document.new_user.stiltskin.value);
+      if(password != "") {
+         var pwdresult = passwordvalidate(password);
+         if(pwdresult == 0){
+            alert("<?php echo xl('The password must be at least eight characters, and should'); echo '\n'; echo xl('contain at least three of the four following items:'); echo '\n'; echo xl('A number'); echo '\n'; echo xl('A lowercase letter'); echo '\n'; echo xl('An uppercase letter'); echo '\n'; echo xl('A special character');echo '('; echo xl('not a letter or number'); echo ').'; echo '\n'; echo xl('For example:'); echo ' healthCare@09'; ?>");
+            return false;
+         }
+      }
+   } //secure_pwd if ends here
+
+   <?php if($GLOBALS['erx_enable']){ ?>
+   alertMsg='';
+   f=document.forms[0];
+   for(i=0;i<f.length;i++){
+      if(f[i].type=='text' && f[i].value)
+      {
+         if(f[i].name == 'rumple')
+         {
+            alertMsg += checkLength(f[i].name,f[i].value,35);
+            alertMsg += checkUsername(f[i].name,f[i].value);
+         }
+         else if(f[i].name == 'fname' || f[i].name == 'mname' || f[i].name == 'lname')
+         {
+            alertMsg += checkLength(f[i].name,f[i].value,35);
+            alertMsg += checkUsername(f[i].name,f[i].value);
+         }
+         else if(f[i].name == 'federaltaxid')
+         {
+            alertMsg += checkLength(f[i].name,f[i].value,10);
+            alertMsg += checkFederalEin(f[i].name,f[i].value);
+         }
+         else if(f[i].name == 'state_license_number')
+         {
+            alertMsg += checkLength(f[i].name,f[i].value,10);
+            alertMsg += checkStateLicenseNumber(f[i].name,f[i].value);
+         }
+         else if(f[i].name == 'npi')
+         {
+            alertMsg += checkLength(f[i].name,f[i].value,35);
+            alertMsg += checkTaxNpiDea(f[i].name,f[i].value);
+         }
+         else if(f[i].name == 'federaldrugid')
+         {
+            alertMsg += checkLength(f[i].name,f[i].value,30);
+            alertMsg += checkAlphaNumeric(f[i].name,f[i].value);
+         }
+      }
+   }
+   if(alertMsg)
+   {
+      alert(alertMsg);
+      return false;
+   }
+   <?php } // End erx_enable only include block?>
+
+    document.forms[0].submit();
+    parent.$.fn.fancybox.close();
+
 }
 function authorized_clicked() {
      var f = document.forms[0];
@@ -137,7 +134,11 @@ function authorized_clicked() {
 }
 
 </script>
-
+<style type="text/css">
+  .physician_type_class{
+    width: 120px !important;
+  }
+</style>
 </head>
 <body class="body_top">
 <table><tr><td>
@@ -154,16 +155,26 @@ function authorized_clicked() {
 <table border=0>
 
 <tr><td valign=top>
-<form name='new_user' method='post'  target="_parent" action="usergroup_admin.php"
+<form name='new_user' id="new_user" method='post'  target="_parent" action="usergroup_admin.php"
  onsubmit='return top.restoreSession()'>
-<input type=hidden name=mode value=new_user>
-<input type=hidden name=secure_pwd value="<?php echo $GLOBALS['secure_password']; ?>">
+<input type='hidden' name='mode' value='new_user'>
+<input type='hidden' name='secure_pwd' value="<?php echo $GLOBALS['secure_password']; ?>">
+
 <span class="bold">&nbsp;</span>
-</td><td>
 <table border=0 cellpadding=0 cellspacing=0 style="width:600px;">
 <tr>
-<td style="width:150px;"><span class="text"><?php xl('Username','e'); ?>: </span></td><td  style="width:220px;"><input type=entry name=rumple style="width:120px;"> <span class="mandatory">&nbsp;*</span></td>
-<td style="width:150px;"><span class="text"><?php xl('Password','e'); ?>: </span></td><td style="width:250px;"><input type="entry" style="width:120px;" name=stiltskin><span class="mandatory">&nbsp;*</span></td>
+<td style="width:150px;"><span class="text"><?php xl('Username','e'); ?>: </span></td><td  style="width:220px;"><input type=entry name="rumple" style="width:120px;"> <span class="mandatory">&nbsp;*</span></td>
+    <?php if(!$GLOBALS['use_active_directory']) { ?>
+<td style="width:150px;"><span class="text"><?php xl('Password','e'); ?>: </span></td><td style="width:250px;"><input type="password" style="width:120px;" name="stiltskin"><span class="mandatory">&nbsp;*</span></td>
+    <?php }else{ ?>
+        <td> <input type="hidden" value="124" name="stiltskin" /></td>
+    <?php } ?>
+</tr>
+<tr>
+    <td style="width:150px;"></td><td  style="width:220px;"></span></td>
+    <TD style="width:200px;"><span class=text><?php xl('Your Password','e'); ?>: </span></TD>
+    <TD class='text' style="width:280px;"><input type='password' name=adminPass style="width:120px;"  value="" autocomplete='off'><font class="mandatory">*</font></TD>
+
 </tr>
 <tr>
 <td><span class="text"<?php if ($GLOBALS['disable_non_default_groups']) echo " style='display:none'"; ?>><?php xl('Groupname','e'); ?>: </span></td>
@@ -193,13 +204,13 @@ foreach ($result2 as $iter) {
 <td><span class="text"><?php xl('Last Name','e'); ?>: </span></td><td><input type=entry name='lname' id='lname' style="width:120px;"><span class="mandatory">&nbsp;*</span></td>
 <td><span class="text"><?php xl('Default Facility','e'); ?>: </span></td><td><select style="width:120px;" name=facility_id>
 <?php
-$fres = sqlStatement("select * from facility where service_location != 0 order by name");
+$fres = $facilityService->getAllServiceLocations();
 if ($fres) {
-  for ($iter = 0;$frow = sqlFetchArray($fres);$iter++)
-    $result[$iter] = $frow;
+  for ($iter = 0; $iter < sizeof($fres);$iter++)
+    $result[$iter] = $fres[$iter];
   foreach($result as $iter) {
 ?>
-<option value="<?php echo $iter{id};?>"><?php echo $iter{name};?></option>
+<option value="<?php echo $iter{'id'};?>"><?php echo $iter{'name'};?></option>
 <?php
   }
 }
@@ -228,29 +239,26 @@ if ($fres) {
 <td><span class="text"><?php xl('Job Description','e'); ?>: </span></td><td><input type="entry" name="specialty" style="width:120px;"></td>
 </tr>
 
-<!-- (CHEMED) Calendar UI preference -->
+<tr>
+	<td>
+		<span class="text"><?php xl('Provider Type','e'); ?>: </span>
+	</td>
+	<td>
+		<?php echo generate_select_list("physician_type", "physician_type", '','',xl('Select Type'),'physician_type_class','','',''); ?>
+	</td>
+</tr>
+
 <tr>
 <td><span class="text"><?php xl('Taxonomy','e'); ?>: </span></td>
 <td><input type="entry" name="taxonomy" style="width:120px;" value="207Q00000X"></td>
-<td><span class="text"><?php xl('Calendar UI','e'); ?>: </span></td><td><select name="cal_ui" style="width:120px;">
-<?php
- foreach (array(3 => xl('Outlook'), 1 => xl('Original'), 2 => xl('Fancy')) as $key => $value)
- {
-  echo " <option value='$key'";
-  if ($key == $iter['cal_ui']) echo " selected";
-  echo ">$value</option>\n";
- }
-?>
-</select></td>
-</tr>
-<!-- END (CHEMED) Calendar UI preference -->
+<td>&nbsp;</td><td>&nbsp;</td></tr>
 
 <tr>
 <td><span class="text"><?php xl('State License Number','e'); ?>: </span></td>
 <td><input type="text" name="state_license_number" style="width:120px;"></td>
 <td class='text'><?php xl('NewCrop eRX Role','e'); ?>:</td>
 <td>
-  <?php echo generate_select_list("erxrole", "newcrop_erx_role", $iter['newcrop_user_role'],'','--Select Role--','','','',array('style'=>'width:120px')); ?>  
+  <?php echo generate_select_list("erxrole", "newcrop_erx_role", '','','--Select Role--','','','',array('style'=>'width:120px')); ?>
 </td>
 </tr>
 

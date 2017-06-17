@@ -25,13 +25,7 @@
 //
 // +------------------------------------------------------------------------------+
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../../interface/globals.php");
 
@@ -130,7 +124,7 @@ else if($Source=='display_item'){
     $resTemplates = sqlStatement("SELECT * FROM customlists WHERE cl_list_type=4 AND cl_deleted=0 AND cl_list_id IN ($val) ORDER BY cl_list_item_long");
         while($rowTemplates = sqlFetchArray($resTemplates)){
         echo "<option value='".htmlspecialchars($rowTemplates['cl_list_slno'],ENT_QUOTES)."'>".htmlspecialchars($rowTemplates['cl_list_item_long'],ENT_QUOTES)."</option>";
-        }                    
+        }
     echo "</select>";
     $Source="add_template";
 }

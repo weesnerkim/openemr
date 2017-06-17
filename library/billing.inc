@@ -1,7 +1,5 @@
 <?php
 
-// require_once("{$GLOBALS['srcdir']}/sql.inc");
-require_once(dirname(__FILE__) . "/sql.inc");
 
 function getBillingById ($id, $cols = "*")
 {
@@ -17,6 +15,7 @@ function getBillingByEncounter ($pid,$encounter, $cols = "code_type, code, code_
 {
     $res = sqlStatement("select $cols from billing where encounter = ? and pid=? and activity=1 order by code_type, date ASC", array($encounter,$pid) );
 
+    $all=array();
     for($iter=0; $row=sqlFetchArray($res); $iter++)
     {
         $all[$iter] = $row;
@@ -26,16 +25,15 @@ function getBillingByEncounter ($pid,$encounter, $cols = "code_type, code, code_
 
 function addBilling($encounter_id, $code_type, $code, $code_text, $pid,
   $authorized="0", $provider, $modifier="", $units="", $fee="0.00",
-  $ndc_info='', $justify='', $billed=0)
+  $ndc_info='', $justify='', $billed=0, $notecodes='', $pricelevel='')
 {
   $sql = "insert into billing (date, encounter, code_type, code, code_text, " .
     "pid, authorized, user, groupname, activity, billed, provider_id, " .
-    "modifier, units, fee, ndc_info, justify) values (" .
-    "NOW(), '$encounter_id', '$code_type', '$code', '$code_text', '$pid', " .
-    "'$authorized', '" . $_SESSION['authId'] . "', '" .
-    $_SESSION['authProvider'] . "', 1, $billed, $provider, '$modifier', '$units', " .
-    "'$fee', '$ndc_info', '$justify')";
-  return sqlInsert($sql);
+    "modifier, units, fee, ndc_info, justify, notecodes, pricelevel) values (" .
+    "NOW(), ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+  return sqlInsert($sql, array($encounter_id,$code_type,$code,$code_text,$pid,$authorized,
+    $_SESSION['authId'],$_SESSION['authProvider'],$billed,$provider,$modifier,$units,$fee,
+    $ndc_info,$justify,$notecodes,$pricelevel));
 }
 
 function authorizeBilling($id, $authorized = "1")
@@ -53,12 +51,12 @@ function clearBilling($id)
     sqlStatement("update billing set justify = '' where id = '$id'");
 }
 
-// This function supports the Billing page (billing_process.php), freeb
-// processing (process_bills.php), and initiation of secondary processing
-// (sl_eob.inc.php).  It is called in the following situations:
+// This function supports the Billing page (billing_process.php),
+// and initiation of secondary processing (sl_eob.inc.php). 
+// It is called in the following situations:
 //
 // * billing_process.php sets bill_time, bill_process, payer and target on
-//   queueing a claim for freeb processing.  Create claims row.
+//   queueing a claim for processing.  Create claims row.
 // * billing_process.php sets claim status to 2, and payer, on marking a
 //   claim as billed without actually generating any billing.  Create a
 //   claims row.  In this case bill_process will remain at 0 and process_time
@@ -68,10 +66,8 @@ function clearBilling($id)
 // * billing_process.php sets claim status to 2 (billed), bill_process to 2,
 //   process_time and process_file after calling gen_x12_837.  Claims row
 //   already exists.
-// * process_bills.php sets bill_process to 2, process_time, and process_file
-//   after invoking freeb to process a claim.  Claims row already exists.
 // * billing_process.php sets claim status to 2 (billed) after creating
-//   an electronic freeb batch (hcfa-only with recent changes).  Claims
+//   an electronic batch (hcfa-only with recent changes).  Claims
 //   row already exists.
 // * EOB posting updates claim status to mark a payer as done.  Claims row
 //   already exists.
@@ -174,24 +170,26 @@ function updateClaim($newversion, $patient_id, $encounter_id, $payer_id=-1, $pay
       "target = '$target', " .
       "x12_partner_id = '$partner_id'";
     ****/
+    sqlBeginTrans();
+    $version = sqlQuery( "SELECT IFNULL(MAX(version),0) + 1 AS increment FROM claims WHERE patient_id = ? AND encounter_id = ?", array( $patient_id, $encounter_id ) );
     if($crossover<>1)
     {
-    $sql = "INSERT INTO claims SET " .
-      "patient_id = '$patient_id', " .
-      "encounter_id = '$encounter_id', " .
-      "bill_time = NOW() $claimset";
-      }
-     else
-     {//Claim automatic forward case.
-     
-     $sql = "INSERT INTO claims SET " .
-      "patient_id = '$patient_id', " .
-      "encounter_id = '$encounter_id', " .
-      "bill_time = NOW(), status=$status";
-     
-     }
-    
+      $sql .= "INSERT INTO claims SET " .
+          "patient_id = $patient_id, " .
+          "encounter_id = $encounter_id, " .
+          "bill_time = NOW() $claimset ," .
+          "version = " . $version['increment'];
+    }
+    else
+    {//Claim automatic forward case.startTra
+      $sql= "INSERT INTO claims SET " .
+          "patient_id = $patient_id, " .
+          "encounter_id = $encounter_id, " .
+          "bill_time = NOW(), status=$status ," .
+          "version = " . $version['increment'];
+    }
     sqlStatement($sql);
+    sqlCommitTrans();
   }
 
   // Otherwise update the existing claim row.
@@ -207,33 +205,209 @@ function updateClaim($newversion, $patient_id, $encounter_id, $payer_id=-1, $pay
   // Whenever a claim is marked billed, update A/R accordingly.
   //
   if ($status == 2) {
-    if ($GLOBALS['oer_config']['ws_accounting']['enabled'] === 2) {
       if ($payer_type > 0) {
         sqlStatement("UPDATE form_encounter SET " .
           "last_level_billed = '$payer_type' WHERE " .
           "pid = '$patient_id' AND encounter = '$encounter_id'");
       }
-    }
-    else {
-      $ws = new WSClaim($patient_id, $encounter_id);
-    }
   }
 
   return 1;
 }
 
-// Determine if anything in a visit has been billed.
+// Determine if the encounter is billed.  It is considered billed if it
+// has at least one chargeable item, and all of them are billed.
 //
 function isEncounterBilled($pid, $encounter) {
-  $row = sqlQuery("SELECT count(*) AS count FROM billing WHERE " .
-    "pid = '$pid' AND encounter = '$encounter' AND activity = 1 AND " .
-    "billed = 1");
-  $count = $row['count'];
-  if (!$count) {
-    $row = sqlQuery("SELECT count(*) AS count FROM drug_sales WHERE " .
-      "pid = '$pid' AND encounter = '$encounter' AND billed = 1");
-    $count = $row['count'];
+  $billed = -1; // no chargeable services yet
+
+  $bres = sqlStatement("SELECT " .
+    "billing.billed FROM billing, code_types WHERE " .
+    "billing.pid = ? AND " .
+    "billing.encounter = ? AND " .
+    "billing.activity = 1 AND " .
+    "code_types.ct_key = billing.code_type AND " .
+    "code_types.ct_fee = 1 " .
+    "UNION " .
+    "SELECT billed FROM drug_sales WHERE " .
+    "pid = ? AND " .
+    "encounter = ?",
+    array($pid, $encounter, $pid, $encounter));
+
+  while ($brow = sqlFetchArray($bres)) {
+    if ($brow['billed'] == 0) {
+      $billed = 0;
+    }
+    else {
+      if ($billed < 0) $billed = 1;
+    }
   }
-  return $count ? true : false;
+
+  return $billed > 0;
+}
+
+// Get the co-pay amount that is effective on the given date.
+// Or if no insurance on that date, return -1.
+//
+function getCopay($patient_id, $encdate) {
+ $tmp = sqlQuery("SELECT provider, copay FROM insurance_data " .
+   "WHERE pid = '$patient_id' AND type = 'primary' " .
+   "AND date <= '$encdate' ORDER BY date DESC LIMIT 1");
+ if ($tmp['provider']) return sprintf('%01.2f', 0 + $tmp['copay']);
+ return 0;
+}
+
+// Get the total co-pay amount paid by the patient for an encounter
+function getPatientCopay($patient_id, $encounter) {
+        $resMoneyGot = sqlStatement("SELECT sum(pay_amount) as PatientPay FROM ar_activity where ".
+          "pid = ? and encounter = ? and payer_type=0 and account_code='PCP'",
+          array($patient_id,$encounter));
+         //new fees screen copay gives account_code='PCP'
+        $rowMoneyGot = sqlFetchArray($resMoneyGot);
+        $Copay=$rowMoneyGot['PatientPay'];
+        return $Copay*-1;
+}
+
+// Get the "next invoice reference number" from this user's pool of reference numbers.
+//
+function getInvoiceRefNumber() {
+  $trow = sqlQuery("SELECT lo.notes " .
+    "FROM users AS u, list_options AS lo " .
+    "WHERE u.username = ? AND " .
+    "lo.list_id = 'irnpool' AND lo.option_id = u.irnpool AND lo.activity = 1 LIMIT 1",
+    array($_SESSION['authUser']));
+  return empty($trow['notes']) ? '' : $trow['notes'];
+}
+
+// Increment the "next invoice reference number" of this user's pool.
+// This identifies the "digits" portion of that number and adds 1 to it.
+// If it contains more than one string of digits, the last is used.
+//
+function updateInvoiceRefNumber() {
+  $irnumber = getInvoiceRefNumber();
+  // Here "?" specifies a minimal match, to get the most digits possible:
+  if (preg_match('/^(.*?)(\d+)(\D*)$/', $irnumber, $matches)) {
+    $newdigs = sprintf('%0' . strlen($matches[2]) . 'd', $matches[2] + 1);
+    $newnumber = $matches[1] . $newdigs . $matches[3];
+    sqlStatement("UPDATE users AS u, list_options AS lo " .
+      "SET lo.notes = ? WHERE " .
+      "u.username = ? AND " .
+      "lo.list_id = 'irnpool' AND lo.option_id = u.irnpool",
+      array($newnumber, $_SESSION['authUser']));
+  }
+  return $irnumber;
+}
+
+// Common function for voiding a receipt or checkout.  When voiding a checkout you can specify
+// $time as a timestamp (yyyy-mm-dd hh:mm:ss) or 'all'; default is the last checkout.
+//
+function doVoid($patient_id, $encounter_id, $purge=false, $time='') {
+  $what_voided = $purge ? 'checkout' : 'receipt';
+  $date_original = '';
+  $adjustments = 0;
+  $payments = 0;
+
+  if (!$time) {
+    // Get last checkout timestamp.
+    $corow = sqlQuery("(SELECT bill_date FROM billing WHERE " .
+      "pid = ? AND encounter = ? AND activity = 1 AND bill_date IS NOT NULL) " .
+      "UNION " .
+      "(SELECT bill_date FROM drug_sales WHERE " .
+      "pid = ? AND encounter = ? AND bill_date IS NOT NULL) " .
+      "ORDER BY bill_date DESC LIMIT 1",
+      array($patient_id, $encounter_id, $patient_id, $encounter_id));
+    if (!empty($corow['bill_date'])) {
+      $date_original = $corow['bill_date'];
+    }
+  }
+  else if ($time == 'all') {
+    $row = sqlQuery("SELECT SUM(pay_amount) AS payments, " .
+      "SUM(adj_amount) AS adjustments FROM ar_activity WHERE " .
+      "pid = ? AND encounter = ?",
+      array($patient_id, $encounter_id));
+    $adjustments = $row['adjustments'];
+    $payments = $row['payments'];
+  }
+  else {
+    $date_original = $time;
+  }
+  // Get its charges and adjustments.
+  if ($date_original) {
+    $row = sqlQuery("SELECT SUM(pay_amount) AS payments, " .
+      "SUM(adj_amount) AS adjustments FROM ar_activity WHERE " .
+      "pid = ? AND encounter = ? AND post_time = ?",
+      array($patient_id, $encounter_id, $date_original));
+    $adjustments = $row['adjustments'];
+    $payments = $row['payments'];
+  }
+
+  // Get old invoice reference number.
+  $encrow = sqlQuery("SELECT invoice_refno FROM form_encounter WHERE " .
+    "pid = ? AND encounter = ? LIMIT 1",
+    array($patient_id, $encounter_id));
+  $old_invoice_refno = $encrow['invoice_refno'];
+  //
+  $usingirnpools = getInvoiceRefNumber();
+  // If not (undoing a checkout or using IRN pools), nothing is done.
+  if ($purge || $usingirnpools) {
+    $query = "INSERT INTO voids SET " .
+      "patient_id = ?, " .
+      "encounter_id = ?, " .
+      "what_voided = ?, " .
+      "date_voided = NOW(), " .
+      "user_id = ?, " .
+      "amount1 = ?, " .
+      "amount2 = ?, " .
+      "other_info = ?";
+    $sqlarr = array($patient_id, $encounter_id, $what_voided, $_SESSION['authUserID'], $row['adjustments'],
+      $row['payments'], $old_invoice_refno);
+    if ($date_original) {
+      $query .= ", date_original = ?";
+      $sqlarr[] = $date_original;
+    }
+    sqlStatement($query, $sqlarr);
+  }
+  if ($purge) {
+    // Purge means delete adjustments and payments from the last checkout
+    // and re-open the visit.
+    if ($date_original) {
+      sqlStatement("DELETE FROM ar_activity WHERE " .
+        "pid = ? AND encounter = ? AND post_time = ?",
+        array($patient_id, $encounter_id, $date_original));
+      sqlStatement("UPDATE billing SET billed = 0, bill_date = NULL WHERE " .
+        "pid = ? AND encounter = ? AND activity = 1 AND " .
+        "bill_date IS NOT NULL AND bill_date = ?",
+        array($patient_id, $encounter_id, $date_original));
+      sqlStatement("update drug_sales SET billed = 0, bill_date = NULL WHERE " .
+        "pid = ? AND encounter = ? AND " .
+        "bill_date IS NOT NULL AND bill_date = ?",
+        array($patient_id, $encounter_id, $date_original));
+    }
+    else {
+      if ($time == 'all') {
+        sqlStatement("DELETE FROM ar_activity WHERE " .
+          "pid = ? AND encounter = ?",
+          array($patient_id, $encounter_id));
+      }
+      sqlStatement("UPDATE billing SET billed = 0, bill_date = NULL WHERE " .
+        "pid = ? AND encounter = ? AND activity = 1",
+          array($patient_id, $encounter_id));
+      sqlStatement("update drug_sales SET billed = 0, bill_date = NULL WHERE " .
+        "pid = ? AND encounter = ?",
+          array($patient_id, $encounter_id));
+    }
+    sqlStatement("UPDATE form_encounter SET last_level_billed = 0, " .
+      "last_level_closed = 0, stmt_count = 0, last_stmt_date = NULL " .
+      "WHERE pid = ? AND encounter = ?",
+      array($patient_id, $encounter_id));
+  }
+  else if ($usingirnpools) {
+    // Non-purge means just assign a new invoice reference number.
+    $new_invoice_refno = add_escape_custom(updateInvoiceRefNumber());
+    sqlStatement("UPDATE form_encounter " .
+      "SET invoice_refno = ? " .
+      "WHERE pid = ? AND encounter = ?",
+      array($new_invoice_refno, $patient_id, $encounter_id));
+  }
 }
 ?>

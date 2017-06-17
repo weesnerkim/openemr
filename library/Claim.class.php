@@ -6,9 +6,6 @@
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
-require_once(dirname(__FILE__) . "/classes/Address.class.php");
-require_once(dirname(__FILE__) . "/classes/InsuranceCompany.class.php");
-require_once(dirname(__FILE__) . "/sql-ledger.inc");
 require_once(dirname(__FILE__) . "/invoice_summary.inc.php");
 
 // This enforces the X12 Basic Character Set. Page A2.
@@ -17,12 +14,28 @@ function x12clean($str) {
   return preg_replace('/[^A-Z0-9!"\\&\'()+,\\-.\\/;?= ]/', '', strtoupper($str));
 }
 
+// Make sure dates have no formatting and zero filled becomes blank
+// Handles date time stamp formats as well
+//
+function cleanDate($date_field)
+  {
+      $cleandate = str_replace('-', '', substr($date_field, 0, 10));
+
+      if(substr_count($cleandate,'0')==8)
+      {
+          $cleandate='';
+      }
+
+      return ($cleandate);
+  }
+
 class Claim {
 
   var $pid;               // patient id
   var $encounter_id;      // encounter id
   var $procs;             // array of procedure rows from billing table
   var $diags;             // array of icd9 codes from billing table
+  var $diagtype= "ICD9";  // diagnosis code_type.Assume ICD9 unless otherwise specified.
   var $x12_partner;       // row from x12_partners table
   var $encounter;         // row from form_encounter table
   var $facility;          // row from facility table
@@ -36,7 +49,8 @@ class Claim {
   var $billing_options;   // row from form_misc_billing_options table
   var $invoice;           // result from get_invoice_summary()
   var $payers;            // array of arrays, for all payers
-  var $copay;             // total of copays from the billing table
+  var $copay;             // total of copays from the ar_activity table
+  var $facilityService;
 
   function loadPayerInfo(&$billrow) {
     global $sl_err;
@@ -91,20 +105,7 @@ class Claim {
     //
     $this->invoice = array();
     if ($this->payerSequence() != 'P') {
-      if ($GLOBALS['oer_config']['ws_accounting']['enabled'] === 2) {
         $this->invoice = ar_get_invoice_summary($this->pid, $this->encounter_id, true);
-      }
-      else if ($GLOBALS['oer_config']['ws_accounting']['enabled']) {
-        SLConnect();
-        $arres = SLQuery("select id from ar where invnumber = " .
-          "'{$this->pid}.{$this->encounter_id}'");
-        if ($sl_err) die($sl_err);
-        $arrow = SLGetRow($arres, 0);
-        if ($arrow) {
-          $this->invoice = get_invoice_summary($arrow['id'], true);
-        }
-        SLClose();
-      }
       // Secondary claims might not have modifiers in SQL-Ledger data.
       // In that case, note that we should not try to match on them.
       $this->using_modifiers = false;
@@ -116,12 +117,14 @@ class Claim {
 
   // Constructor. Loads relevant database information.
   //
-  function Claim($pid, $encounter_id) {
+  function __construct($pid, $encounter_id) {
     $this->pid = $pid;
     $this->encounter_id = $encounter_id;
     $this->procs = array();
     $this->diags = array();
     $this->copay = 0;
+
+    $this->facilityService = new \services\FacilityService();
 
     // We need the encounter date before we can identify the payers.
     $sql = "SELECT * FROM form_encounter WHERE " .
@@ -130,18 +133,20 @@ class Claim {
     $this->encounter = sqlQuery($sql);
 
     // Sort by procedure timestamp in order to get some consistency.
-    $sql = "SELECT * FROM billing WHERE " .
-      "encounter = '{$this->encounter_id}' AND pid = '{$this->pid}' AND " .
-      "(code_type = 'CPT4' OR code_type = 'HCPCS' OR code_type = 'COPAY' OR code_type = 'ICD9') AND " .
-      "activity = '1' ORDER BY date, id";
+    $sql = "SELECT b.id, b.date, b.code_type, b.code, b.pid, b.provider_id, " .
+      "b.user, b.groupname, b.authorized, b.encounter, b.code_text, b.billed, " .
+      "b.activity, b.payer_id, b.bill_process, b.bill_date, b.process_date, " .
+      "b.process_file, b.modifier, b.units, b.fee, b.justify, b.target, b.x12_partner_id, " .
+      "b.ndc_info, b.notecodes, ct.ct_diag " .
+      "FROM billing as b INNER JOIN code_types as ct " .
+      "ON b.code_type = ct.ct_key " .
+      "WHERE ct.ct_claim = '1' AND ct.ct_active = '1' AND " .
+      "b.encounter = '{$this->encounter_id}' AND b.pid = '{$this->pid}' AND " .
+      "b.activity = '1' ORDER BY b.date, b.id";
     $res = sqlStatement($sql);
     while ($row = sqlFetchArray($res)) {
-      if ($row['code_type'] == 'COPAY') {
-        $this->copay -= $row['fee'];
-        continue;
-      }
       // Save all diagnosis codes.
-      if ($row['code_type'] == 'ICD9') {
+      if ($row['ct_diag'] == '1') {
         $this->diags[$row['code']] = $row['code'];
         continue;
       }
@@ -149,17 +154,10 @@ class Claim {
       // Load prior payer data at the first opportunity in order to get
       // the using_modifiers flag that is referenced below.
       if (empty($this->procs)) $this->loadPayerInfo($row);
-      // Consolidate duplicate procedures.
-      foreach ($this->procs as $key => $trash) {
-        if (strcmp($this->procs[$key]['code'],$row['code']) == 0 &&
-            (strcmp($this->procs[$key]['modifier'],$row['modifier']) == 0 ||
-             !$this->using_modifiers))
-        {
-          $this->procs[$key]['units'] += $row['units'];
-          $this->procs[$key]['fee']   += $row['fee'];
-          continue 2; // skip to next table row
-        }
-      }
+
+      // The consolidate duplicate procedures, which was previously here, was removed
+      // from codebase on 12/9/15. Reason: Some insurance companies decline consolidated
+      // procedures, and this can be left up to the billing coder when they input the items.
 
       // If there is a row-specific provider then get its details.
       if (!empty($row['provider_id'])) {
@@ -178,14 +176,20 @@ class Claim {
       $this->procs[] = $row;
     }
 
+    $resMoneyGot = sqlStatement("SELECT pay_amount as PatientPay,session_id as id,".
+      "date(post_time) as date FROM ar_activity where pid ='{$this->pid}' and encounter ='{$this->encounter_id}' ".
+      "and payer_type=0 and account_code='PCP'");
+      //new fees screen copay gives account_code='PCP'
+    while($rowMoneyGot = sqlFetchArray($resMoneyGot)){
+      $PatientPay=$rowMoneyGot['PatientPay']*-1;
+      $this->copay -= $PatientPay;
+    }
+
     $sql = "SELECT * FROM x12_partners WHERE " .
       "id = '" . $this->procs[0]['x12_partner_id'] . "'";
     $this->x12_partner = sqlQuery($sql);
 
-    $sql = "SELECT * FROM facility WHERE " .
-      "id = '" . addslashes($this->encounter['facility_id']) . "' " .
-      "LIMIT 1";
-    $this->facility = sqlQuery($sql);
+    $this->facility = $this->facilityService->getById($this->encounter['facility_id']);
 
     /*****************************************************************
     $provider_id = $this->procs[0]['provider_id'];
@@ -196,14 +200,11 @@ class Claim {
     // Selecting the billing facility assigned  to the encounter.  If none,
     // try the first (and hopefully only) facility marked as a billing location.
     if (empty($this->encounter['billing_facility'])) {
-      $sql = "SELECT * FROM facility " .
-        "ORDER BY billing_location DESC, id ASC LIMIT 1";
+      $this->billing_facility = $this->facilityService->getPrimaryBillingLocation();
     }
     else {
-      $sql = "SELECT * FROM facility " .
-      " where id ='" . addslashes($this->encounter['billing_facility']) . "' ";
+      $this->billing_facility = $this->facilityService->getById($this->encounter['billing_facility']);
     }
-    $this->billing_facility = sqlQuery($sql);
 
     $sql = "SELECT * FROM insurance_numbers WHERE " .
       "(insurance_company_id = '" . $this->procs[0]['payer_id'] .
@@ -228,7 +229,7 @@ class Claim {
 
     $referrer_id = (empty($GLOBALS['MedicareReferrerIsRenderer']) ||
       $this->insurance_numbers['provider_number_type'] != '1C') ?
-      $this->patient_data['providerID'] : $provider_id;
+      $this->patient_data['ref_providerID'] : $provider_id;
     $sql = "SELECT * FROM users WHERE id = '$referrer_id'";
     $this->referrer = sqlQuery($sql);
     if (!$this->referrer) $this->referrer = array();
@@ -237,6 +238,11 @@ class Claim {
     $sql = "SELECT * FROM users WHERE id = '$supervisor_id'";
     $this->supervisor = sqlQuery($sql);
     if (!$this->supervisor) $this->supervisor = array();
+
+    $billing_options_id = $this->billing_options['provider_id'];
+    $sql = "SELECT * FROM users WHERE id = ?";
+    $this->billing_prov_id = sqlQuery($sql, array($billing_options_id));
+    if (!$this->billing_prov_id) $this->billing_prov_id = array();
 
     $sql = "SELECT * FROM insurance_numbers WHERE " .
       "(insurance_company_id = '" . $this->procs[0]['payer_id'] .
@@ -284,14 +290,14 @@ class Claim {
       $coinsurance = 0;
       $inslabel = ($this->payerSequence($ins) == 'S') ? 'Ins2' : 'Ins1';
       $insnumber = substr($inslabel, 3);
-	  
+
       // Compute this procedure's patient responsibility amount as of this
       // prior payer, which is the original charge minus all insurance
       // payments and "hard" adjustments up to this payer.
       $ptresp = $this->invoice[$code]['chg'] + $this->invoice[$code]['adj'];
       foreach ($this->invoice[$code]['dtl'] as $key => $value) {
-        if (isset($value['plv'])) {
-          // New method; plv (from ar_activity.payer_type) exists to
+
+          // plv (from ar_activity.payer_type) exists to
           // indicate the payer level.
           if (isset($value['pmt']) && $value['pmt'] != 0) {
             if ($value['plv'] > 0 && $value['plv'] <= $insnumber)
@@ -302,20 +308,9 @@ class Claim {
             if ($value['plv'] > 0 && $value['plv'] <= $insnumber)
               $ptresp += $value['chg']; // adjustments are negative charges
           }
-          
+
           $msp = isset( $value['msp'] ) ? $value['msp'] : null; // record the reason for adjustment
         }
-        else {
-          // Old method: With SQL-Ledger payer level was stored in the memo.
-          if (preg_match("/^Ins(\d)/i", $value['src'], $tmp)) {
-            if ($tmp[1] <= $insnumber) $ptresp -= $value['pmt'];
-          }
-          else if (trim(substr($key, 0, 10))) { // not an adjustment if no date
-            if (!preg_match("/Ins(\d)/i", $value['rsn'], $tmp) || $tmp[1] <= $insnumber)
-              $ptresp += $value['chg']; // adjustments are negative charges
-          }
-        }
-      }
       if ($ptresp < 0) $ptresp = 0; // we may be insane but try to hide it
 
       // Main loop, to extract adjustments for this payer and procedure.
@@ -403,19 +398,12 @@ class Claim {
       $thispaidanything = 0;
       foreach($this->invoice as $codekey => $codeval) {
         foreach ($codeval['dtl'] as $key => $value) {
-          if (isset($value['plv'])) {
-            // New method; plv exists to indicate the payer level.
+            // plv exists to indicate the payer level.
             if ($value['plv'] == $insnumber) {
               $thispaidanything += $value['pmt'];
             }
           }
-          else {
-            if (preg_match("/$inslabel/i", $value['src'], $tmp)) {
-              $thispaidanything += $value['pmt'];
-            }
-          }
         }
-      }
 
       // Allocate any unknown patient responsibility by guessing if the
       // deductible has been satisfied.
@@ -455,22 +443,13 @@ class Claim {
     foreach($this->invoice as $codekey => $codeval) {
       if ($code && strcmp($codekey,$code) != 0) continue;
       foreach ($codeval['dtl'] as $key => $value) {
-        if (isset($value['plv'])) {
-          // New method; plv (from ar_activity.payer_type) exists to
+          // plv (from ar_activity.payer_type) exists to
           // indicate the payer level.
           if ($value['plv'] == $insnumber) {
             if (!$date) $date = str_replace('-', '', trim(substr($key, 0, 10)));
             $paytotal += $value['pmt'];
           }
         }
-        else {
-          // Old method: With SQL-Ledger payer level was stored in the memo.
-          if (preg_match("/$inslabel/i", $value['src'], $tmp)) {
-            if (!$date) $date = str_replace('-', '', trim(substr($key, 0, 10)));
-            $paytotal += $value['pmt'];
-          }
-        }
-      }
       $aarr = $this->payerAdjustments($ins, $codekey);
       foreach ($aarr as $a) {
         if (strcmp($a[1],'PR') != 0) $adjtotal += $a[3];
@@ -484,25 +463,17 @@ class Claim {
   //
   function patientPaidAmount() {
     // For primary claims $this->invoice is not loaded, so get the co-pay
-    // from the billing table instead.
+    // from the ar_activity table instead.
     if (empty($this->invoice)) return $this->copay;
     //
     $amount = 0;
     foreach($this->invoice as $codekey => $codeval) {
       foreach ($codeval['dtl'] as $key => $value) {
-        if (isset($value['plv'])) {
-          // New method; plv exists to indicate the payer level.
+          // plv exists to indicate the payer level.
           if ($value['plv'] == 0) { // 0 indicates patient
             $amount += $value['pmt'];
           }
         }
-        else {
-          // Old method: With SQL-Ledger payer level was stored in the memo.
-          if (!preg_match("/Ins/i", $value['src'], $tmp)) {
-            $amount += $value['pmt'];
-          }
-        }
-      }
     }
     return sprintf('%.2f', $amount);
   }
@@ -537,6 +508,26 @@ class Claim {
     return $tmp;
   }
 
+  function x12gs03() {
+   /*
+    * GS03: Application Receiver's Code
+    * Code Identifying Party Receiving Transmission
+    *
+    * In most cases, the ISA08 and GS03 are the same. However
+    *
+    * In some clearing houses ISA08 and GS03 are different
+    * Example: http://www.acs-gcro.com/downloads/DOL/DOL_CG_X12N_5010_837_v1_02.pdf - Page 18
+    * In this .pdf, the ISA08 is specified to be 100000 while the GS03 is specified to be 77044
+    *
+    * Therefore if the x12_gs03 segement is explicitly specified we use that value,
+    * otherwise we simply use the same receiver ID as specified for ISA03
+    */
+    if($this->x12_partner['x12_gs03'] !== '')
+        return $this->x12_partner['x12_gs03'];
+    else
+        return $this->x12_partner['x12_receiver_id'];
+  }
+
   function x12gsreceiverid() {
     $tmp = $this->x12_partner['x12_receiver_id'];
     while (strlen($tmp) < 15) $tmp .= " ";
@@ -546,7 +537,24 @@ class Claim {
   function x12gsisa05() {
     return $this->x12_partner['x12_isa05'];
   }
+//adding in functions for isa 01 - isa 04
 
+  function x12gsisa01() {
+    return $this->x12_partner['x12_isa01'];
+  }
+
+  function x12gsisa02() {
+    return $this->x12_partner['x12_isa02'];
+  }
+
+   function x12gsisa03() {
+    return $this->x12_partner['x12_isa03'];
+  }
+   function x12gsisa04() {
+    return $this->x12_partner['x12_isa04'];
+  }
+
+/////////
   function x12gsisa07() {
     return $this->x12_partner['x12_isa07'];
   }
@@ -600,7 +608,7 @@ class Claim {
   function billingFacilityNPI() {
     return x12clean(trim($this->billing_facility['facility_npi']));
   }
-  
+
   function federalIdType() {
 	if ($this->billing_facility['tax_id_type'])
 	{
@@ -660,7 +668,11 @@ class Claim {
   }
 
   function facilityPOS() {
-    return sprintf('%02d', trim($this->facility['pos_code']));
+	  if($this->encounter['pos_code']){
+		  return sprintf('%02d', trim($this->encounter['pos_code']));
+	  }else{
+		return sprintf('%02d', trim($this->facility['pos_code']));
+	  }
   }
 
   function clearingHouseName() {
@@ -765,7 +777,12 @@ class Claim {
   //
   function claimType($ins=0) {
     if (empty($this->payers[$ins]['object'])) return '';
-    return $this->payers[$ins]['object']->get_freeb_claim_type();
+    return $this->payers[$ins]['object']->get_ins_claim_type();
+  }
+
+  function claimTypeRaw($ins=0) {
+    if (empty($this->payers[$ins]['object'])) return 0;
+    return $this->payers[$ins]['object']->get_ins_type_code();
   }
 
   function insuredLastName($ins=0) {
@@ -916,7 +933,18 @@ class Claim {
   }
 
   function cptModifier($prockey) {
-    return x12clean(trim($this->procs[$prockey]['modifier']));
+    // Split on the colon or space and clean each modifier
+    $mods = array();
+    $cln_mods = array();
+    $mods = preg_split("/[: ]/",trim($this->procs[$prockey]['modifier']));
+    foreach ($mods as $mod) {
+        array_push($cln_mods, x12clean($mod));
+    }
+    return (implode (':', $cln_mods));
+  }
+
+  function cptNotecodes($prockey) {
+    return x12clean(trim($this->procs[$prockey]['notecodes']));
   }
 
   // Returns the procedure code, followed by ":modifier" if there is one.
@@ -964,15 +992,13 @@ class Claim {
     return '';
   }
 
-  function onsetDate() {//Without the else clause in the claim zero value is coming.
-    $replace_value=str_replace('-', '', substr($this->encounter['onset_date'], 0, 10));
-	if($replace_value*1<>0)
-    {
-	 return $replace_value;
-	}
-	else{
-	 return '';
-	}
+  function onsetDate() {
+    return cleanDate($this->encounter['onset_date']);
+  }
+
+  function onsetDateValid()
+  {
+      return $this->onsetDate()!=='';
   }
 
   function serviceDate() {
@@ -1004,11 +1030,11 @@ class Claim {
   }
 
   function offWorkFrom() {
-    return str_replace('-', '', substr($this->billing_options['off_work_from'], 0, 10));
+    return cleanDate($this->billing_options['off_work_from']);
   }
 
   function offWorkTo() {
-    return str_replace('-', '', substr($this->billing_options['off_work_to'], 0, 10));
+    return cleanDate($this->billing_options['off_work_to']);
   }
 
   function isHospitalized() {
@@ -1016,11 +1042,11 @@ class Claim {
   }
 
   function hospitalizedFrom() {
-    return str_replace('-', '', substr($this->billing_options['hospitalization_date_from'], 0, 10));
+    return cleanDate($this->billing_options['hospitalization_date_from']);
   }
 
   function hospitalizedTo() {
-    return str_replace('-', '', substr($this->billing_options['hospitalization_date_to'], 0, 10));
+    return cleanDate($this->billing_options['hospitalization_date_to']);
   }
 
   function isOutsideLab() {
@@ -1029,6 +1055,14 @@ class Claim {
 
   function outsideLabAmount() {
     return sprintf('%.2f', 0 + $this->billing_options['lab_amount']);
+  }
+
+   function medicaidReferralCode() {
+    return x12clean(trim($this->billing_options['medicaid_referral_code']));
+  }
+
+  function epsdtFlag() {
+    return x12clean(trim($this->billing_options['epsdt_flag']));
   }
 
   function medicaidResubmissionCode() {
@@ -1040,7 +1074,11 @@ class Claim {
   }
 
   function frequencyTypeCode() {
-    return empty($this->billing_options['replacement_claim']) ? '1' : '7';
+    return ($this->billing_options['replacement_claim'] == 1) ? '7' : '1';
+  }
+
+   function icnResubmissionNumber() {
+    return x12clean($this->billing_options['icn_resubmission_number']);
   }
 
   function additionalNotes() {
@@ -1048,17 +1086,62 @@ class Claim {
   }
 
   function dateInitialTreatment() {
-    return str_replace('-', '', substr($this->billing_options['date_initial_treatment'], 0, 10));
+    return cleanDate($this->billing_options['date_initial_treatment']);
   }
 
-  // Returns an array of unique diagnoses.  Periods are stripped.
-  function diagArray() {
+  function box14qualifier()
+  {
+      // If no box qualifier specified use "431" indicating Onset
+      return empty($this->billing_options['box_14_date_qual']) ? '431' :
+              $this->billing_options['box_14_date_qual'];
+  }
+
+  function box15qualifier()
+  {
+      // If no box qualifier specified use "454" indicating Initial Treatment
+      return empty($this->billing_options['box_15_date_qual']) ? '454' :
+              $this->billing_options['box_15_date_qual'];
+  }
+  // Returns an array of unique diagnoses.  Periods are stripped by default
+  // Option to keep periods is to support HCFA 1500 02/12 version
+  function diagArray($strip_periods=true) {
     $da = array();
     foreach ($this->procs as $row) {
       $atmp = explode(':', $row['justify']);
       foreach ($atmp as $tmp) {
         if (!empty($tmp)) {
-          $diag = str_replace('.', '', $tmp);
+          $code_data = explode('|',$tmp);
+
+          // If there was a | in the code data, the the first part of the array is the type, and the second is the identifier
+          if (!empty($code_data[1])) {
+
+            // This is the simplest way to determine if the claim is using ICD9 or ICD10 codes
+            // a mix of code types is generally not allowed as there is only one specifier for all diagnoses on HCFA-1500 form
+            // and there would be ambiguity with E and V codes
+            $this->diagtype=$code_data[0];
+
+            //code is in the second part of the $code_data array.
+            if($strip_periods==true)
+                {
+                    $diag = str_replace('.', '', $code_data[1]);
+
+                }
+                else
+                {
+                    $diag=$code_data[1];
+                }
+
+          }
+          else {
+            //No prepended code type label
+            if($strip_periods) {
+                $diag = str_replace('.', '', $code_data[0]);
+            }
+            else
+            {
+                $diag=$code_data[0];
+            }
+          }
           $da[$diag] = $diag;
         }
       }
@@ -1068,7 +1151,7 @@ class Claim {
     // or not, to make sure they all get into the claim.  We do it this way
     // so that the more important diagnoses appear first.
     foreach ($this->diags as $diag) {
-      $diag = str_replace('.', '', $diag);
+      if($strip_periods) {$diag = str_replace('.', '', $diag);}
       $da[$diag] = $diag;
     }
     return $da;
@@ -1096,7 +1179,15 @@ class Claim {
     $atmp = explode(':', $this->procs[$prockey]['justify']);
     foreach ($atmp as $tmp) {
       if (!empty($tmp)) {
-        $diag = str_replace('.', '', $tmp);
+        $code_data = explode('|',$tmp);
+        if (!empty($code_data[1])) {
+          //Strip the prepended code type label
+          $diag = str_replace('.', '', $code_data[1]);
+        }
+        else {
+          //No prepended code type label
+          $diag = str_replace('.', '', $code_data[0]);
+        }
         $i = 0;
         foreach ($da as $value) {
           ++$i;
@@ -1129,6 +1220,20 @@ class Claim {
     $tmp = ($prockey < 0 || empty($this->procs[$prockey]['provider_id'])) ?
       $this->provider : $this->procs[$prockey]['provider'];
     return x12clean(trim($tmp['npi']));
+  }
+
+  function NPIValid($npi)
+  {
+      // A NPI MUST be a 10 digit number
+      if($npi==='') return false;
+      if(strlen($npi)!=10) return false;
+      if(!preg_match("/[0-9]*/",$npi)) return false;
+      return true;
+
+  }
+  function providerNPIValid($prockey=-1)
+  {
+      return $this->NPIValid($this->providerNPI($prockey));
   }
 
   function providerUPIN($prockey=-1) {
@@ -1214,6 +1319,35 @@ class Claim {
 
   function supervisorNumber() {
     return x12clean(trim(str_replace('-', '', $this->supervisor_numbers['provider_number'])));
+  }
+
+  function billingProviderLastName() {
+    return x12clean(trim($this->billing_prov_id['lname']));
+  }
+
+  function billingProviderFirstName() {
+    return x12clean(trim($this->billing_prov_id['fname']));
+  }
+
+  function billingProviderMiddleName() {
+    return x12clean(trim($this->billing_prov_id['mname']));
+  }
+
+  function billingProviderNPI() {
+    return x12clean(trim($this->billing_prov_id['npi']));
+  }
+
+  function billingProviderUPIN() {
+    return x12clean(trim($this->billing_prov_id['upin']));
+  }
+
+  function billingProviderSSN() {
+    return x12clean(trim(str_replace('-', '', $this->billing_prov_id['federaltaxid'])));
+  }
+
+  function billingProviderTaxonomy() {
+    if (empty($this->billing_prov_id['taxonomy'])) return '207Q00000X';
+    return x12clean(trim($this->billing_prov_id['taxonomy']));
   }
 
 }

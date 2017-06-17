@@ -1,24 +1,30 @@
 <?php
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * Display patient notes.
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @link    http://www.open-emr.org
+ */
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
  require_once("../../globals.php");
  require_once("$srcdir/pnotes.inc");
  require_once("$srcdir/acl.inc");
  require_once("$srcdir/patient.inc");
  require_once("$srcdir/options.inc.php");
- require_once("$srcdir/classes/Document.class.php");
- require_once("$srcdir/formatting.inc.php");
 
  // form parameter docid can be passed to restrict the display to a document.
  $docid = empty($_REQUEST['docid']) ? 0 : 0 + $_REQUEST['docid'];
@@ -49,9 +55,8 @@ $fake_register_globals=false;
      } else { ?>
     <table width='100%' border='0' cellspacing='1' cellpadding='1' style='border-collapse:collapse;' >
     <?php
-    
-    $pres = sqlQuery("SELECT lname, fname " .
-     "FROM patient_data WHERE pid = ?", array($pid) );
+
+    $pres = getPatientData($pid,"lname, fname");
     $patientname = $pres['lname'] . ", " . $pres['fname'];
     //retrieve all active notes
     $result = getPnotesByDate("", 1, "id,date,body,user,title,assigned_to,message_status",
@@ -103,22 +108,25 @@ $fake_register_globals=false;
     <?php
     if ($has_note < 1 ) { ?>
         <span class='text'>
-            <?php echo htmlspecialchars(xl( "There are no notes on file for this patient."),ENT_NOQUOTES);
-                  echo " ";
-	          echo "<a href='pnotes_full.php'>";
-	          echo htmlspecialchars(xl("To add notes, please click here"),ENT_NOQUOTES);
-	          echo "</a>."; ?>
+<?php
+    echo xlt("There are no notes on file for this patient.");
+    if (acl_check('patients', 'notes', '', array('write', 'addonly'))) {
+      echo " ";
+      echo "<a href='pnotes_full.php' onclick='top.restoreSession()'>";
+      echo xlt("To add notes, please click here");
+      echo "</a>.";
+    }
+?>
         </span>
-    <?php } else {
-        ?>
+<?php } else { ?>
         <br/>
         <span class='text'>
-	    <?php echo htmlspecialchars(xl('Displaying the following number of most recent notes:'),ENT_NOQUOTES); ?> 
+<?php echo htmlspecialchars(xl('Displaying the following number of most recent notes:'),ENT_NOQUOTES); ?>
 	    <b><?php echo $N;?></b><br>
-	    <a href='pnotes_full.php?s=0'><?php echo htmlspecialchars(xl('Click here to view them all.'),ENT_NOQUOTES); ?></a>
-        </span>
-        <?php
-    } ?>
+	    <a href='pnotes_full.php?s=0' onclick='top.restoreSession()'>
+      <?php echo htmlspecialchars(xl('Click here to view them all.'),ENT_NOQUOTES); ?></a>
+      </span>
+<?php } ?>
 
     <br/>
     <br/>
@@ -176,19 +184,22 @@ $fake_register_globals=false;
     <?php
     if ($has_sent_note < 1 ) { ?>
         <span class='text'>
-            <?php echo htmlspecialchars(xl( "There are no notes on file for this patient."),ENT_NOQUOTES);
-                  echo " ";
-	          echo "<a href='pnotes_full.php'>";
-	          echo htmlspecialchars(xl("To add notes, please click here"),ENT_NOQUOTES);
-	          echo "</a>."; ?>
+<?php
+    echo xlt("There are no notes on file for this patient.");
+    if (acl_check('patients', 'notes', '', array('write', 'addonly'))) {
+      echo " ";
+      echo "<a href='pnotes_full.php' onclick='top.restoreSession()'>";
+      echo xlt("To add notes, please click here");
+      echo "</a>.";
+    }
+?>
         </span>
-    <?php } else {
-        ?>
+<?php } else { ?>
         <br/>
         <span class='text'>
-	    <?php echo htmlspecialchars(xl('Displaying the following number of most recent notes'),ENT_NOQUOTES).":"; ?> 
+	    <?php echo htmlspecialchars(xl('Displaying the following number of most recent notes'),ENT_NOQUOTES).":"; ?>
 	    <b><?php echo $M;?></b><br>
-	    <a href='pnotes_full.php?s=1'><?php echo htmlspecialchars(xl('Click here to view them all.'),ENT_NOQUOTES); ?></a>
+	    <a href='pnotes_full.php?s=1' onclick='top.restoreSession()'><?php echo htmlspecialchars(xl('Click here to view them all.'),ENT_NOQUOTES); ?></a>
         </span>
         <?php
     } ?>
@@ -209,4 +220,3 @@ $(document).ready(function(){
 });
 
 </script>
-

@@ -1,5 +1,5 @@
 <?php
-// Copyright (C) 2011 Brady Miller <brady@sparmy.com>
+// Copyright (C) 2011 Brady Miller <brady.g.miller@gmail.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -32,7 +32,7 @@ function processAmcCall($amc_id, $complete, $mode, $patient_id, $object_category
   if (!($complete === True || $complete === False)) {
     if ($complete === "true") $complete = True;
     if ($complete === "false") $complete = False;
-  }  
+  }
 
   if ($mode == "add") {
     amcAdd($amc_id, $complete, $patient_id, $object_category, $object_id);
@@ -54,6 +54,12 @@ function processAmcCall($amc_id, $complete, $mode, $patient_id, $object_category
   }
   else if ($mode == "uncomplete_safe") {
     amcUnCompleteSafe($amc_id, $patient_id, $object_category, $object_id, $date_created);
+  }
+  else if ($mode == "soc_provided"){
+        amcSoCProvided($amc_id, $patient_id, $object_category, $object_id);
+  }
+  else if ($mode == "no_soc_provided"){
+        amcNoSoCProvided($amc_id, $patient_id, $object_category, $object_id);
   }
   else {
     // do nothing
@@ -207,7 +213,7 @@ function amcTrackingRequest($amc_id,$start='',$end='',$provider_id='') {
         $where .= " AND `date`<=? ";
         array_push($sqlBindArray,$end);
       }
-      $rez = sqlStatement("SELECT `id`, `date` FROM `transactions` WHERE `title`='Referral' AND `pid`=? $where ORDER BY `date` DESC", $sqlBindArray);
+      $rez = sqlStatement("SELECT `id`, `date` FROM `transactions` WHERE `title` = 'LBTref' AND `pid` = ? $where ORDER BY `date` DESC", $sqlBindArray);
       while ($res = sqlFetchArray($rez)) {
         $amcCheck = amcCollect("send_sum_amc",$patient['pid'],"transactions",$res['id']);
         if (empty($amcCheck)) {
@@ -329,6 +335,23 @@ function businessDaysDifference($startDate,$endDate,$holidays=array()) {
   }
 
   return $workingDays;
+}
+
+// Function to set summary of care provided for a encounter/patient from the amc_misc_data sql table
+//   $amc_id     - amc rule id
+//   $patient_id - pid
+//   $object_category - specific item category (such as prescriptions, transactions etc.)
+//   $object_id  - specific item id (such as encounter id, prescription id, etc.)
+function amcSoCProvided($amc_id, $patient_id, $object_category='', $object_id='0') {
+         sqlStatement("UPDATE `amc_misc_data` SET `soc_provided` = NOW() WHERE `amc_id`=? AND `pid`=? AND `map_category`=? AND `map_id`=? ", array($amc_id,$patient_id,$object_category,$object_id) );
+}
+// Function to set summary of care provided for a encounter/patient from the amc_misc_data sql table
+//   $amc_id     - amc rule id
+//   $patient_id - pid
+//   $object_category - specific item category (such as prescriptions, transactions etc.)
+//   $object_id  - specific item id (such as encounter id, prescription id, etc.)
+function amcNoSoCProvided($amc_id, $patient_id, $object_category='', $object_id='0') {
+         sqlStatement("UPDATE `amc_misc_data` SET `soc_provided` = NULL WHERE `amc_id`=? AND `pid`=? AND `map_category`=? AND `map_id`=? ", array($amc_id,$patient_id,$object_category,$object_id) );
 }
 
 ?>

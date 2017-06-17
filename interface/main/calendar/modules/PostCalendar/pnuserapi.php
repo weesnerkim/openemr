@@ -30,6 +30,8 @@
 //  Require utility classes
 //=========================================================================
 require_once($GLOBALS['fileroot']."/library/patient.inc");
+require_once($GLOBALS['fileroot']."/library/group.inc");
+include_once($GLOBALS['fileroot']."/library/encounter_events.inc.php");
 $pcModInfo = pnModGetInfo(pnModGetIDFromName(__POSTCALENDAR__));
 $pcDir = pnVarPrepForOS($pcModInfo['directory']);
 require_once("modules/$pcDir/common.api.php");
@@ -114,7 +116,7 @@ function postcalendar_userapi_buildView($args)
 	//=================================================================
 	//  set the correct date
 	//=================================================================
-	$Date =& postcalendar_getDate();
+	$Date =postcalendar_getDate();
 
 	//=================================================================
 	//  get the current view
@@ -497,8 +499,8 @@ function postcalendar_userapi_buildView($args)
 		$tpl->assign_by_ref('MONTH_END_DATE',$month_view_end);
 		$tpl->assign_by_ref('TODAY_DATE',$today_date);
 		$tpl->assign_by_ref('DATE',$Date);
-		$tpl->assign_by_ref('SCHEDULE_BASE_URL', pnModURL(__POSTCALENDAR__,'user','submit'));
-		$tpl->assign_by_ref('interval',$intervals);
+		$tpl->assign('SCHEDULE_BASE_URL', pnModURL(__POSTCALENDAR__,'user','submit'));
+		$tpl->assign_by_ref('intervals',$intervals);
         };
 
 	//=================================================================
@@ -755,7 +757,7 @@ function &postcalendar_userapi_pcQueryEventsFA($args)	{
     "concat(pd.fname,' ',pd.lname) as patient_name, " .
     "concat(u2.fname, ' ', u2.lname) as owner_name, pd.DOB as patient_dob, " .
     "a.pc_facility" .
-    "FROM  ( $table AS a ) " . 
+    "FROM  ( $table AS a ) " .
     "LEFT JOIN $cattable AS b ON b.pc_catid = a.pc_catid " .
     "LEFT JOIN users as u ON a.pc_aid = u.id " .
     "LEFT JOIN users as u2 ON a.pc_aid = u2.id " .
@@ -985,12 +987,14 @@ function &postcalendar_userapi_pcQueryEvents($args)
     "concat(u.fname,' ',u.lname) as provider_name, " .
     "concat(pd.lname,', ',pd.fname) as patient_name, " .
     "concat(u2.fname, ' ', u2.lname) as owner_name, " .
-    "DOB as patient_dob, a.pc_facility, pd.pubpid " .
+    "DOB as patient_dob, a.pc_facility, pd.pubpid, a.pc_gid, " .
+    "tg.group_name, tg.group_type, tg.group_status " .
     "FROM  ( $table AS a ) " .
     "LEFT JOIN $cattable AS b ON b.pc_catid = a.pc_catid ".
     "LEFT JOIN users as u ON a.pc_aid = u.id " .
     "LEFT JOIN users as u2 ON a.pc_aid = u2.id " .
     "LEFT JOIN patient_data as pd ON a.pc_pid = pd.pid " .
+    "LEFT JOIN therapy_groups as tg ON a.pc_gid = tg.group_id " .
     "WHERE  a.pc_eventstatus = $eventstatus " .
     "AND ((a.pc_endDate >= '$start' AND a.pc_eventDate <= '$end') OR " .
     "(a.pc_endDate = '0000-00-00' AND a.pc_eventDate >= '$start' AND " .
@@ -1029,7 +1033,7 @@ function &postcalendar_userapi_pcQueryEvents($args)
       $sql .= "AND (a.pc_sharing = '" . SHARING_BUSY . "' ";
       $sql .= "OR a.pc_sharing = '" . SHARING_PUBLIC . "') ";
     } else {
-      $sql .= "AND a.pc_aid = " . $ruserid . " ";
+      $sql .= "AND a.pc_aid IN (0, " . $ruserid . ") ";
     }
   } elseif(!pnUserLoggedIn()) {
     // get all events for anonymous users
@@ -1037,11 +1041,12 @@ function &postcalendar_userapi_pcQueryEvents($args)
   } elseif(!empty($provider_id)) {
     // get all events for a variety of provider IDs -- JRM
     if ($provider_id[0] != "_ALL_") {
-        $sql .= "AND a.pc_aid in (" . implode(",", $provider_id). ") ";
+		/**add all the events from the clinic provider id = 0*/
+        $sql .= "AND a.pc_aid in (0," . implode(",", $provider_id). ") ";
     }
   } else {
     // get all events for logged in user plus global events
-    $sql .= "AND (a.pc_aid = " . $_SESSION['authUserID'] . " OR a.pc_sharing = '" . SHARING_GLOBAL . "') ";
+    $sql .= "AND (a.pc_aid IN (0," . $_SESSION['authUserID'] . ") OR a.pc_sharing = '" . SHARING_GLOBAL . "') ";
   }
 
   //======================================================================
@@ -1091,7 +1096,8 @@ function &postcalendar_userapi_pcQueryEvents($args)
          $tmp['catname'],      $tmp['catdesc'],     $tmp['pid'],
          $tmp['apptstatus'],   $tmp['aid'],         $tmp['provider_name'],
          $tmp['patient_name'], $tmp['owner_name'],  $tmp['patient_dob'],
-         $tmp['facility'],     $tmp['pubpid']) = $result->fields;
+         $tmp['facility'],     $tmp['pubpid'],      $tmp['gid'],
+		 $tmp['group_name'],   $tmp['group_type'],  $tmp['group_status']) = $result->fields;
 
     // grab the name of the topic
     $topicname = pcGetTopicName($tmp['topic']);
@@ -1116,7 +1122,6 @@ function &postcalendar_userapi_pcQueryEvents($args)
     // this is the common information
 
     $events[$i]['intervals'] 	=($tmp['duration']/60)/	$GLOBALS['day_calandar_interval'];//sets the number of rows this event should span
-    print_r($events[$i]['intervals']);
 
     $events[$i]['eid']         = $tmp['eid'];
     $events[$i]['uname']       = $tmp['uname'];
@@ -1201,7 +1206,14 @@ function &postcalendar_userapi_pcQueryEvents($args)
       $events[$i]['state']      = $prepFunction($loc['event_state']);
       $events[$i]['postal']     = $prepFunction($loc['event_postal']);
     }
-    $i++;
+    $events[$i]['gid']          = $tmp['gid'];
+    $events[$i]['group_name']   = $tmp['group_name'];
+    $events[$i]['group_type']   = $tmp['group_type'];
+    $events[$i]['group_status'] = $tmp['group_status'];
+    $counselors = getProvidersOfEvent($tmp['eid']);
+    $events[$i]['group_counselors'] = $counselors;
+
+	  $i++;
   }
   unset($tmp);
   $result->Close();
@@ -1238,7 +1250,7 @@ function &postcalendar_userapi_pcGetEvents($args)
     $s_keywords = $s_category = $s_topic = '';
     extract($args);
 	
-    $date =& postcalendar_getDate();
+    $date =postcalendar_getDate();
     $cy = substr($date,0,4);
     $cm = substr($date,4,2);
     $cd = substr($date,6,2);
@@ -1268,20 +1280,20 @@ function &postcalendar_userapi_pcGetEvents($args)
     
     if ($faFlag && !isset($events)) {
         $a = array('faFlag' => true,'start'=>$start_date,'end'=>$end_date,'s_keywords'=>$s_keywords,'s_category'=>$s_category,'s_topic'=>$s_topic,'viewtype'=>$viewtype, 'provider_id' => $provider_id, 'event_status' => $event_status);
-        $events =& pnModAPIFunc(__POSTCALENDAR__,'user','<strong></strong>pcQueryEventsFA',$a);
+        $events = pnModAPIFunc(__POSTCALENDAR__,'user','<strong></strong>pcQueryEventsFA',$a);
     }
     elseif ($collideFlag && !isset($events)) {
         $a = array('collideFlag' => true,'start'=>$start_date,'end'=>$end_date, 'provider_id' => $provider_id, 'collide_stime' => $stime, 'collide_etime' => $etime);
-        $events =& pnModAPIFunc(__POSTCALENDAR__,'user','pcQueryEventsFA',$a);
+        $events = pnModAPIFunc(__POSTCALENDAR__,'user','pcQueryEventsFA',$a);
     }
     elseif ($listappsFlag && !isset($events)) {
         $a = array('listappsFlag' => true,'start'=>$start_date,'end'=>$end_date, 'patient_id' => $patient_id, 's_keywords' => $s_keywords);
-        $events =& pnModAPIFunc(__POSTCALENDAR__,'user','pcQueryEvents',$a);
+        $events = pnModAPIFunc(__POSTCALENDAR__,'user','pcQueryEvents',$a);
     }
     else if(!isset($events)) {
         if(!isset($s_keywords)) $s_keywords = '';
         $a = array('start'=>$start_date,'end'=>$end_date,'s_keywords'=>$s_keywords,'s_category'=>$s_category,'s_topic'=>$s_topic,'viewtype'=>$viewtype, "sort" => "pc_startTime ASC, a.pc_duration ASC ",'providerID' => $providerID, 'provider_id' => $provider_id);
-        $events =& pnModAPIFunc(__POSTCALENDAR__,'user','pcQueryEvents',$a);
+        $events = pnModAPIFunc(__POSTCALENDAR__,'user','pcQueryEvents',$a);
     }
 
     //==============================================================
@@ -1308,46 +1320,37 @@ function &postcalendar_userapi_pcGetEvents($args)
 // fill days with events (recurring is the challenge)
 //===========================
 function calculateEvents($days,$events,$viewtype) {
-  $date =& postcalendar_getDate();
+  //
+  $date =postcalendar_getDate();
   $cy = substr($date,0,4);
   $cm = substr($date,4,2);
   $cd = substr($date,6,2);
 
+  // here the start_date value is set to whatever comes in
+  // on postcalendar_getDate() which is not always the first
+  // date of the days array -- JRM
+  $start_date = "$cy-$cm-$cd";
+
+  // here we've made the start_date equal to the first date
+  // of the days array, makes sense, right? -- JRM
+  $days_keys = array_keys($days);
+  $start_date = $days_keys[0];
+  $day_number = count($days_keys);
+
+  // Optimization of the stop date to not be much later than required.
+  $tmpsecs = strtotime($start_date);
+  if      ($viewtype == 'day')   $tmpsecs +=  3 * 24 * 3600;
+  else if ($viewtype == 'week')  $tmpsecs +=  9 * 24 * 3600;
+  else if ($viewtype == 'month') {
+    if($day_number > 35) $tmpsecs = strtotime("+41 days", $tmpsecs); // Added for 6th row by epsdky 2017
+    else $tmpsecs = strtotime("+34 days", $tmpsecs);
+  }
+  else $tmpsecs += 367 * 24 * 3600;
+  $last_date = date('Y-m-d', $tmpsecs);
+
   foreach($events as $event) {
     // get the name of the topic
     $topicname = pcGetTopicName($event['topic']);
-
-    // parse the event start date
-    list($esY,$esM,$esD) = explode('-',$event['eventDate']);
-
-    // grab the recurring specs for the event
-    $event_recurrspec = @unserialize($event['recurrspec']);
-
-    // determine the stop date for this event
-    if($event['endDate'] == '0000-00-00') {
-      $stop = $end_date;  // <--- this isn't previously defined !!
-    } else {
-      $stop = $event['endDate'];
-    }
-   
-    // here the start_date value is set to whatever comes in
-    // on postcalendar_getDate() which is not always the first
-    // date of the days array -- JRM
-    $start_date = "$cy-$cm-$cd";
-
-    // here we've made the start_date equal to the first date
-    // of the days array, makes sense, right? -- JRM
-    $days_keys = array_keys($days);
-    $start_date = $days_keys[0];
-
-    // Optimization of the stop date to not be much later than required.
-    $tmpsecs = strtotime($start_date);
-    if      ($viewtype == 'day')   $tmpsecs +=  3 * 24 * 3600;
-    else if ($viewtype == 'week')  $tmpsecs +=  9 * 24 * 3600;
-    else if ($viewtype == 'month') $tmpsecs += 34 * 24 * 3600;
-    else $tmpsecs += 367 * 24 * 3600;
-    $tmp = date('Y-m-d', $tmpsecs);
-    if ($stop > $tmp) $stop = $tmp;
 
     $eventD = $event['eventDate'];
     $eventS = $event['startTime'];
@@ -1382,6 +1385,14 @@ function calculateEvents($days,$events,$viewtype) {
       //  Day,Week,Month,Year,MWF,TR,M-F,SS
       //==============================================================
       case REPEAT :
+      case REPEAT_DAYS:
+
+        // Stop date selection code modified and moved here by epsdky 2017 (details in commit)
+        if($last_date > $event['endDate']) $stop = $event['endDate'];
+        else $stop = $last_date;
+
+        list($esY,$esM,$esD) = explode('-',$event['eventDate']);
+        $event_recurrspec = @unserialize($event['recurrspec']);
 
         $rfreq = $event_recurrspec['event_repeat_freq'];
         $rtype = $event_recurrspec['event_repeat_freq_type'];
@@ -1435,6 +1446,13 @@ function calculateEvents($days,$events,$viewtype) {
       //==============================================================
       case REPEAT_ON :
 
+        // Stop date selection code modified and moved here by epsdky 2017 (details in commit)
+        if($last_date > $event['endDate']) $stop = $event['endDate'];
+        else $stop = $last_date;
+
+        list($esY,$esM,$esD) = explode('-',$event['eventDate']);
+        $event_recurrspec = @unserialize($event['recurrspec']);
+
         $rfreq = $event_recurrspec['event_repeat_on_freq'];
         $rnum  = $event_recurrspec['event_repeat_on_num'];
         $rday  = $event_recurrspec['event_repeat_on_day'];
@@ -1444,6 +1462,13 @@ function calculateEvents($days,$events,$viewtype) {
         //  Populate - Enter data into the event array
         //==============================================================
         $nm = $esM; $ny = $esY; $nd = $esD;
+
+        if(isset($event_recurrspec['rt2_pf_flag']) && $event_recurrspec['rt2_pf_flag']) $nd = 1; // Added by epsdky 2016.
+        // $nd will sometimes be 29, 30 or 31 and if used in the mktime functions
+        // below a problem with overfow will occur so it is set to 1 to prevent this.
+        // (for rt2 appointments set prior to fix it remains unchanged). This can be done
+        // since $nd has no influence past the mktime functions - epsdky 2016.
+
         // make us current
         while($ny < $cy) {
           $occurance = date('Y-m-d',mktime(0,0,0,$nm+$rfreq,$nd,$ny));
@@ -1469,7 +1494,7 @@ function calculateEvents($days,$events,$viewtype) {
                     }
                 }
             }
-            
+
             // push event into the days array
             if ($excluded == false) array_push($days[$occurance],$event);
 
@@ -1483,7 +1508,6 @@ function calculateEvents($days,$events,$viewtype) {
           $occurance = date('Y-m-d',mktime(0,0,0,$nm+$rfreq,$nd,$ny));
           list($ny,$nm,$nd) = explode('-',$occurance);
         }
-
         break;
 
     } // <- end of switch($event['recurrtype'])
@@ -1502,46 +1526,5 @@ function fillBlocks($td,$ar) {
 
 }
 
-/**
- *	__increment()
- *	returns the next valid date for an event based on the
- *	current day,month,year,freq and type
- *  @private
- *	@returns string YYYY-MM-DD
- */
-function &__increment($d,$m,$y,$f,$t)
-{
-    if($t == REPEAT_EVERY_DAY) {
-        return date('Y-m-d',mktime(0,0,0,$m,($d+$f),$y));
-    } elseif($t == REPEAT_EVERY_WORK_DAY) {
-        // a workday is defined as Mon,Tue,Wed,Thu,Fri
-        // repeating on every or Nth work day means to not include
-        // weekends (Sat/Sun) in the increment... tricky
-
-        // ugh, a day-by-day loop seems necessary here, something where
-        // we can check to see if the day is a Sat/Sun and increment
-        // the frequency count so as to ignore the weekend. hmmmm....
-        $orig_freq = $f;
-        for ($daycount=1; $daycount<=$orig_freq; $daycount++) {
-            $nextWorkDOW = date('D',mktime(0,0,0,$m,($d+$daycount),$y));
-            if ($nextWorkDOW == "Sat") { $f++; }
-            else if ($nextWorkDOW == "Sun") { $f++; }
-        }
-        // and finally make sure we haven't landed on a Sat/Sun
-        // adjust as necessary
-        $nextWorkDOW = date('D',mktime(0,0,0,$m,($d+$f),$y));
-        if ($nextWorkDOW == "Sat") { $f+=2; }
-        else if ($nextWorkDOW == "Sun") { $f++; }
-
-        return date('Y-m-d',mktime(0,0,0,$m,($d+$f),$y));
-
-    } elseif($t == REPEAT_EVERY_WEEK) {
-        return date('Y-m-d',mktime(0,0,0,$m,($d+(7*$f)),$y));
-    } elseif($t == REPEAT_EVERY_MONTH) {
-        return date('Y-m-d',mktime(0,0,0,($m+$f),$d,$y));
-    } elseif($t == REPEAT_EVERY_YEAR) {
-        return date('Y-m-d',mktime(0,0,0,$m,$d,($y+$f)));
-    }
-}
 
 ?>

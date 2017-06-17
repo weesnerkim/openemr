@@ -8,8 +8,6 @@ This file was generated on %date% at %time%
 The original location of this file is /home/duhlman/uml-generated-code/prescription.php
 **************************************************************************/
 
-require_once("ORDataObject.class.php");
-require_once("InsuranceNumbers.class.php");
 /**
  * class Provider
  *
@@ -28,7 +26,7 @@ class Provider extends ORDataObject{
         /**
          * Constructor sets all Prescription attributes to their default value
          */
-        function Provider ($id = "", $prefix = "")      {
+        function __construct ($id = "", $prefix = "")      {
                 $this->id = $id;
                 $this->federal_drug_id = "";
                 $this->_table = "users";
@@ -41,7 +39,7 @@ class Provider extends ORDataObject{
         }
 
         function populate() {
-                $res = sqlQuery("SELECT fname,lname,federaldrugid, specialty, npi, state_license_number FROM users where id =". mysql_real_escape_string($this->id));
+                $res = sqlQuery("SELECT fname,lname,federaldrugid, specialty, npi, state_license_number FROM users where id =". add_escape_custom($this->id));
 
                 if (is_array($res)) {
                         $this->lname = $res['lname'];
@@ -59,7 +57,7 @@ class Provider extends ORDataObject{
         function utility_provider_array() {
                 $provider_array = array();
                 $res = sqlQ("Select id,fname,lname  from users where authorized = 1");
-                while ($row = mysql_fetch_array($res) ) {
+                while ($row = sqlFetchArray($res) ) {
                                 $provider_array[$row['id']] = $row['fname'] . " " . $row['lname'];
                 }
                 return $provider_array;
@@ -70,7 +68,7 @@ class Provider extends ORDataObject{
                 $sql = "SELECT id FROM "  . $this->_table . " where authorized = 1 " . $sort;
                 $results = sqlQ($sql);
 
-                while($row = mysql_fetch_array($results) ) {
+                while($row = sqlFetchArray($results) ) {
                                 $psa[] = new Provider($row['id']);
                 }
 
@@ -104,6 +102,7 @@ class Provider extends ORDataObject{
         function get_insurance_numbers() {
                 return $this->insurance_numbers;
         }
+
         function get_insurance_numbers_default() {
                 return $this->insurance_numbers[0];
         }
@@ -112,13 +111,14 @@ class Provider extends ORDataObject{
                 if (!empty($this->insurance_numbers)) {
                         return $this->insurance_numbers[0]->get_group_number();
                 }
+        }
+
         function get_npi() {
                 return $this->npi;
         }
-        
+
         function get_state_license_number() {
                 return $this->state_license_number;
-        }
         }
 
 } // end of Provider

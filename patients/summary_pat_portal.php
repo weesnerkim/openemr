@@ -16,18 +16,20 @@
 // (note this is already completed by the script that includes this
 //    get_patient_info.php )
 
+//continue session
+session_start();
+
 //landing page definition -- where to go if something goes wrong
-$landingpage = "index.php";
+$landingpage = "index.php?site=".$_SESSION['site_id'];
 //
 
 // kick out if patient not authenticated
-session_start();
 if ( isset($_SESSION['pid']) && isset($_SESSION['patient_portal_onsite']) ) {
   $pid = $_SESSION['pid'];
 }
 else {
   session_destroy();
-  header('Location: '.$landingpage.'?w');
+  header('Location: '.$landingpage.'&w');
   exit;
 }
 //
@@ -38,19 +40,15 @@ global $ignoreAuth;
  require_once("../interface/globals.php");
  require_once("$srcdir/patient.inc");
  require_once("$srcdir/acl.inc");
- require_once("$srcdir/classes/Address.class.php");
- require_once("$srcdir/classes/InsuranceCompany.class.php");
- require_once("$srcdir/classes/Document.class.php");
  require_once("$srcdir/options.inc.php");
  require_once("../interface/patient_file/history/history.inc.php");
- require_once("$srcdir/formatting.inc.php");
  require_once("$srcdir/edi.inc");
  include_once("$srcdir/lists.inc");
 
 ?>
 <html>
-
 <head>
+<title><?php echo xlt('Patient Information'); ?></title>
 <?php html_header_show(); ?>
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
 <link rel="stylesheet" type="text/css" href="<?php echo $web_root; ?>/library/js/fancybox/jquery.fancybox-1.2.6.css" media="screen" />
@@ -59,8 +57,8 @@ global $ignoreAuth;
 <script type="text/javascript" src="<?php echo $web_root; ?>/library/dynarch_calendar.js"></script>
 <?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
 <script type="text/javascript" src="<?php echo $web_root; ?>/library/dynarch_calendar_setup.js"></script>
-<script type="text/javascript" src="<?php echo $web_root; ?>/library/dialog.js"></script>
-<script type="text/javascript" src="<?php echo $web_root; ?>/library/js/jquery.1.3.2.js"></script>
+<script type="text/javascript" src="<?php echo $web_root; ?>/library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-3-2/index.js"></script>
 <script type="text/javascript" src="<?php echo $web_root; ?>/library/js/common.js"></script>
 <script type="text/javascript" src="<?php echo $web_root; ?>/library/js/fancybox/jquery.fancybox-1.2.6.js"></script>
 <link rel="stylesheet" href="css/base.css" type="text/css"/>
@@ -74,11 +72,11 @@ global $ignoreAuth;
  function toggleIndicator(target,div) {
 
     $mode = $(target).find(".indicator").text();
-    if ( $mode == "<?php echo htmlspecialchars(xl('collapse'),ENT_QUOTES); ?>" ) {
-        $(target).find(".indicator").text( "<?php echo htmlspecialchars(xl('expand'),ENT_QUOTES); ?>" );
+    if ( $mode == "<?php echo xla('collapse'); ?>" ) {
+        $(target).find(".indicator").text( "<?php echo xla('expand'); ?>" );
         $("#"+div).hide();
     } else {
-        $(target).find(".indicator").text( "<?php echo htmlspecialchars(xl('collapse'),ENT_QUOTES); ?>" );
+        $(target).find(".indicator").text( "<?php echo xla('collapse'); ?>" );
         $("#"+div).show();
     }
  }
@@ -162,7 +160,21 @@ $(document).ready(function(){
                   }
           });
       });
-      
+	  $("#amendments_ps_expand").load("get_amendments.php", { 'embeddedScreen' : true }, function() {
+          // (note need to place javascript code here also to get the dynamic link to work)
+          $(".medium_modal").fancybox( {
+                  'overlayOpacity' : 0.0,
+                  'showCloseButton' : true,
+                  'frameHeight' : 500,
+                  'frameWidth' : 800,
+                  'centerOnScroll' : false,
+                  'callbackOnClose' : function()  {
+                  refreshme();
+                  }
+          });
+      });
+
+
       refreshAppointments();
 
     // fancy box
@@ -184,7 +196,7 @@ $(document).ready(function(){
     'centerOnScroll' : false,
     'autoscale' : true
   });
-  
+
   $(".add_event").fancybox( {
   	'overlayOpacity' : 0.0,
     'showCloseButton' : true,
@@ -200,7 +212,7 @@ $(document).ready(function(){
         function() {
                 if(document.getElementById('show_date').checked == true){
                         if(document.getElementById('Start').value == '' || document.getElementById('End').value == ''){
-                                alert('<?php echo addslashes( xl('Please select a start date and end date')) ?>');
+                                alert('<?php echo xls('Please select a start date and end date') ?>');
                                 return false;
                         }
                 }
@@ -234,7 +246,7 @@ $(document).ready(function(){
         function() {
                 if(document.getElementById('show_date').checked == true){
                         if(document.getElementById('Start').value == '' || document.getElementById('End').value == ''){
-                                alert('<?php echo addslashes( xl('Please select a start date and end date')) ?>');
+                                alert('<?php echo xls('Please select a start date and end date') ?>');
                                 return false;
                         }
                 }
@@ -264,6 +276,94 @@ $(document).ready(function(){
                 $("#ccr_form").submit();
                 ccr_form.setAttribute("target", "");
         });
+        $(".viewCCD_download").click(
+        function() {
+                var ccrAction = document.getElementsByName('ccrAction');
+                ccrAction[0].value = 'viewccd';
+                var raw = document.getElementsByName('raw');
+                raw[0].value = 'pure';
+                $("#ccr_form").submit();
+        });
+        $(".generateDoc_download").click(
+        function() {
+                $("#doc_form").submit();
+        });
+<?php if ($GLOBALS['phimail_enable']==true && $GLOBALS['phimail_ccr_enable']==true) { ?>
+        $(".viewCCR_send_dialog").click(
+        function() {
+                $("#ccr_send_dialog").toggle();
+        });
+        $(".viewCCR_transmit").click(
+        function() {
+                $(".viewCCR_transmit").attr('disabled','disabled');
+                var ccrAction = document.getElementsByName('ccrAction');
+                ccrAction[0].value = 'generate';
+                var ccrRecipient = $("#ccr_send_to").val();
+                var raw = document.getElementsByName('raw');
+                raw[0].value = 'send '+ccrRecipient;
+                if(ccrRecipient=="") {
+                  $("#ccr_send_message").html("<?php
+       echo xla('Please enter a valid Direct Address above.');?>");
+                  $("#ccr_send_result").show();
+                } else {
+                  $(".viewCCR_transmit").attr('disabled','disabled');
+                  $("#ccr_send_message").html("<?php
+       echo xla('Working... this may take a minute.');?>");
+                  $("#ccr_send_result").show();
+                  var action=$("#ccr_form").attr('action');
+                  $.post(action, {ccrAction:'generate',raw:'send '+ccrRecipient,requested_by:'patient'},
+                     function(data) {
+                       if(data=="SUCCESS") {
+                         $("#ccr_send_message").html("<?php
+       echo xla('Your message was submitted for delivery to');
+                           ?> "+ccrRecipient);
+                         $("#ccr_send_to").val("");
+                       } else {
+                         $("#ccr_send_message").html(data);
+                       }
+                       $(".viewCCR_transmit").removeAttr('disabled');
+                  });
+                }
+        });
+<?php }
+      if ($GLOBALS['phimail_enable']==true && $GLOBALS['phimail_ccd_enable']==true) { ?>
+        $(".viewCCD_send_dialog").click(
+        function() {
+                $("#ccd_send_dialog").toggle();
+        });
+        $(".viewCCD_transmit").click(
+        function() {
+                $(".viewCCD_transmit").attr('disabled','disabled');
+                var ccrAction = document.getElementsByName('ccrAction');
+                ccrAction[0].value = 'viewccd';
+                var ccdRecipient = $("#ccd_send_to").val();
+                var raw = document.getElementsByName('raw');
+                raw[0].value = 'send '+ccdRecipient;
+                if(ccdRecipient=="") {
+                  $("#ccd_send_message").html("<?php
+       echo xla('Please enter a valid Direct Address above.');?>");
+                  $("#ccd_send_result").show();
+                } else {
+                  $(".viewCCD_transmit").attr('disabled','disabled');
+                  $("#ccd_send_message").html("<?php
+       echo xla('Working... this may take a minute.');?>");
+                  $("#ccd_send_result").show();
+                  var action=$("#ccr_form").attr('action');
+                  $.post(action, {ccrAction:'viewccd',raw:'send '+ccdRecipient,requested_by:'patient'},
+                     function(data) {
+                       if(data=="SUCCESS") {
+                         $("#ccd_send_message").html("<?php
+       echo xla('Your message was submitted for delivery to');
+                           ?> "+ccdRecipient);
+                         $("#ccd_send_to").val("");
+                       } else {
+                         $("#ccd_send_message").html(data);
+                       }
+             	       $(".viewCCD_transmit").removeAttr('disabled');
+                  });
+                }
+        });
+<?php } ?>
 
 });
 
@@ -274,12 +374,12 @@ $(document).ready(function(){
 <body class="body_top">
 
 <div id="wrapper" class="lefttop" style="width: 700px;">
-<h2 class="heading"><?php echo htmlspecialchars( xl('Patient Portal'), ENT_NOQUOTES); ?></h2>
+<h2 class="heading"><?php echo xlt("Patient Portal"); ?></h2>
 
 <?php
  $result = getPatientData($pid);
 ?>
-<?php echo htmlspecialchars( xl('Welcome'), ENT_NOQUOTES); ?> <b><?php echo htmlspecialchars($result['fname']." ".$result['lname'],ENT_NOQUOTES); ?></b>
+<?php echo xlt('Welcome'); ?> <b><?php echo text($result['fname']." ".$result['lname']); ?></b>
 
 <div style='margin-top:10px'> <!-- start main content div -->
  <table border="0" cellspacing="0" cellpadding="0" width="100%">
@@ -309,44 +409,44 @@ $(document).ready(function(){
            <div style='margin-left:3em; margin-right:3em; padding:1em; border:1px solid blue;' class='text'>
             <div id="ccr_report">
              <form name='ccr_form' id='ccr_form' method='post' action='../ccr/createCCR.php?portal_auth=1'>
-             <span class='text'><b><?php echo htmlspecialchars( xl('Continuity of Care Record (CCR)'), ENT_NOQUOTES); ?></b></span>&nbsp;&nbsp;
+             <span class='text'><b><?php echo xlt('Continuity of Care Record (CCR)'); ?></b></span>&nbsp;&nbsp;
              <br/>
-             <span class='text'>(<?php echo htmlspecialchars( xl('Pop ups need to be enabled to see these reports'), ENT_NOQUOTES); ?>)</span>
+             <span class='text'>(<?php echo xlt('Pop ups need to be enabled to see these reports'); ?>)</span>
              <br/>
              <br/>
              <input type='hidden' name='ccrAction'>
              <input type='hidden' name='raw'>
-             <input type="checkbox" name="show_date" id="show_date" onchange="show_date_fun();" ><span class='text'><?php echo htmlspecialchars( xl('Use Date Range'), ENT_NOQUOTES); ?>
+             <input type="checkbox" name="show_date" id="show_date" onchange="show_date_fun();" ><span class='text'><?php echo xlt('Use Date Range'); ?>
              <br>
              <div id="date_div" style="display:none" >
               <br>
               <table border="0" cellpadding="0" cellspacing="0" >
                <tr>
                 <td>
-                 <span class='bold'><?php echo htmlspecialchars( xl('Start Date'), ENT_NOQUOTES);?>: </span>
+                 <span class='bold'><?php echo xlt('Start Date');?>: </span>
                 </td>
                 <td>
                  <input type='text' size='10' name='Start' id='Start'
                  onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)'
-                 title='<?php echo htmlspecialchars( xl('yyyy-mm-dd'), ENT_QUOTES); ?>' />
+                 title='<?php echo xla('yyyy-mm-dd'); ?>' />
                  <img src='../interface/pic/show_calendar.gif' align='absbottom' width='24' height='22'
                  id='img_start' border='0' alt='[?]' style='cursor:pointer'
-                 title='<?php echo htmlspecialchars( xl('Click here to choose a date'), ENT_QUOTES); ?>' >
+                 title='<?php echo xla('Click here to choose a date'); ?>' >
                  <script LANGUAGE="JavaScript">
                   Calendar.setup({inputField:"Start", ifFormat:"%Y-%m-%d", button:"img_start"});
                  </script>
                 </td>
                 <td>
                  &nbsp;
-                 <span class='bold'><?php echo htmlspecialchars( xl('End Date'), ENT_NOQUOTES);?>: </span>
+                 <span class='bold'><?php echo xlt('End Date');?>: </span>
                 </td>
                 <td>
                  <input type='text' size='10' name='End' id='End'
                  onkeyup='datekeyup(this,mypcc)' onblur='dateblur(this,mypcc)'
-                 title='<?php echo htmlspecialchars( xl('yyyy-mm-dd'), ENT_QUOTES); ?>' />
+                 title='<?php echo xla('yyyy-mm-dd'); ?>' />
                  <img src='../interface/pic/show_calendar.gif' align='absbottom' width='24' height='22'
                  id='img_end' border='0' alt='[?]' style='cursor:pointer'
-                 title='<?php echo htmlspecialchars( xl('Click here to choose a date'), ENT_QUOTES); ?>' >
+                 title='<?php echo xla('Click here to choose a date'); ?>' >
                  <script LANGUAGE="JavaScript">
                   Calendar.setup({inputField:"End", ifFormat:"%Y-%m-%d", button:"img_end"});
                  </script>
@@ -355,27 +455,89 @@ $(document).ready(function(){
               </table>
              </div>
              <br>
-             <input type="button" class="generateCCR" value="<?php echo htmlspecialchars( xl('View/Print'), ENT_QUOTES); ?>" />
-             <!-- <input type="button" class="generateCCR_download_h" value="<?php echo htmlspecialchars( xl('Download'), ENT_QUOTES); ?>" /> -->
-             <input type="button" class="generateCCR_download_p" value="<?php echo htmlspecialchars( xl('Download'), ENT_QUOTES); ?>" />
-             <!-- <input type="button" class="generateCCR_raw" value="<?php echo htmlspecialchars( xl('Raw Report'), ENT_QUOTES); ?>" /> -->
+             <input type="button" class="generateCCR" value="<?php echo xla('View/Print'); ?>" />
+             <!-- <input type="button" class="generateCCR_download_h" value="<?php echo xla('Download'); ?>" /> -->
+             <input type="button" class="generateCCR_download_p" value="<?php echo xla('Download'); ?>" />
+             <!-- <input type="button" class="generateCCR_raw" value="<?php echo xla('Raw Report'); ?>" /> -->
+<?php if ($GLOBALS['phimail_enable']==true && $GLOBALS['phimail_ccr_enable']==true) { ?>
+             <input type="button" class="viewCCR_send_dialog" value="<?php echo xla('Transmit'); ?>" />
+             <br>
+             <div id="ccr_send_dialog" style="display:none" >
+              <br>
+              <table border="0" cellpadding="0" cellspacing="0" >
+               <tr>
+                <td>
+                 <span class='bold'><?php echo xlt('Enter Recipient\'s Direct Address');?>: </span>
+                <input type="text" size="64" name="ccr_send_to" id="ccr_send_to" value="">
+                <input type="button" class="viewCCR_transmit" value="<?php echo xla('Send'); ?>" />
+                <div id="ccr_send_result" style="display:none" >
+                 <span class="text" id="ccr_send_message"></span>
+                </div>
+                </td>
+              </tr>
+              </table>
+             </div>
+<?php } ?>
              <hr/>
-             <span class='text'><b><?php echo htmlspecialchars( xl('Continuity of Care Document (CCD)'), ENT_NOQUOTES); ?></b></span>&nbsp;&nbsp;
+             <span class='text'><b><?php echo xlt('Continuity of Care Document (CCD)'); ?></b></span>&nbsp;&nbsp;
              <br/>
-             <span class='text'>(<?php echo htmlspecialchars( xl('Pop ups need to be enabled to see these reports'), ENT_NOQUOTES); ?>)</span>
+             <span class='text'>(<?php echo xlt('Pop ups need to be enabled to see these reports'); ?>)</span>
              <br/>
              <br/>
-             <input type="button" class="viewCCD" value="<?php echo htmlspecialchars( xl('View/Print', ENT_QUOTES)); ?>" />
-             <!-- <input type="button" class="viewCCD_raw" value="<?php echo htmlspecialchars( xl('Raw Report', ENT_QUOTES)); ?>" /> -->
+             <input type="button" class="viewCCD" value="<?php echo xla('View/Print'); ?>" />
+             <input type="button" class="viewCCD_download" value="<?php echo xla('Download'); ?>" />
+             <!-- <input type="button" class="viewCCD_raw" value="<?php echo xla('Raw Report'); ?>" /> -->
+<?php if ($GLOBALS['phimail_enable']==true && $GLOBALS['phimail_ccd_enable']==true) { ?>
+             <input type="button" class="viewCCD_send_dialog" value="<?php echo xla('Transmit'); ?>" />
+             <br>
+             <div id="ccd_send_dialog" style="display:none" >
+              <br>
+              <table border="0" cellpadding="0" cellspacing="0" >
+               <tr>
+                <td>
+                 <span class='bold'><?php echo xlt('Enter Recipient\'s Direct Address');?>: </span>
+                <input type="text" size="64" name="ccd_send_to" id="ccd_send_to" value="">
+                <input type="button" class="viewCCD_transmit" value="<?php echo xla('Send'); ?>" />
+                <div id="ccd_send_result" style="display:none" >
+                 <span class="text" id="ccd_send_message"></span>
+                </div>
+                </td>
+              </tr>
+              </table>
+             </div>
+<?php } ?>
             </form>
            </div>
           </div>
           <br/>
+
          </div>
         </td>
        </tr>
 <?php } // end CCR/CCD reporting options ?>
-
+<?php if ( $GLOBALS['portal_onsite_document_download'] ) { ?>
+<?php echo "<tr><td width='650px'>";
+$widgetTitle = xl('Documents');
+$widgetLabel = "documents";
+$widgetButtonLabel = xl('Download');
+$widgetButtonClass = "hidden";
+$linkMethod = "html";
+$bodyClass = "notab";
+$widgetAuth = false;
+$fixedWidth = true;
+expand_collapse_widget($widgetTitle, $widgetLabel, $widgetButtonLabel,
+  $widgetButtonLink, $widgetButtonClass, $linkMethod, $bodyClass,
+ $widgetAuth, $fixedWidth);
+?>
+<span class="text"><?php echo xlt('Download all patient documents');?></span>
+<br /><br />
+<form name='doc_form' id='doc_form' action='get_patient_documents.php' method='post'>
+	<input type="button" class="generateDoc_download" value="<?php echo xla('Download'); ?>" />
+</form>
+</div>
+</td>
+</tr>
+<?php } ?>
 <?php echo "<tr><td width='650px'>";
 // Lab tests results expand collapse widget
 $widgetTitle = xl("Lab Test Results");
@@ -393,7 +555,8 @@ expand_collapse_widget($widgetTitle, $widgetLabel, $widgetButtonLabel,
 
                     <br/>
                     <div style='margin-left:10px' class='text'><img src='images/ajax-loader.gif'/></div><br/>
-                </div>
+                  </div>
+
 			</td>
 		</tr>
                 <?php echo "<tr><td width='650px'>";
@@ -409,9 +572,11 @@ expand_collapse_widget($widgetTitle, $widgetLabel, $widgetButtonLabel,
                 expand_collapse_widget($widgetTitle, $widgetLabel, $widgetButtonLabel , $widgetButtonLink, $widgetButtonClass, $linkMethod, $bodyClass, $widgetAuth, $fixedWidth); ?>
 
                 </div>
+
+
                         </td>
                 </tr>
-              
+
        <tr>
        <td width='650px'>
 <?php
@@ -431,8 +596,9 @@ expand_collapse_widget($widgetTitle, $widgetLabel, $widgetButtonLabel,
                     <br/>
                     <div style='margin-left:10px' class='text'><img src='images/ajax-loader.gif'/></div><br/>
                 </div>
+
      </td>
-    </tr>		
+    </tr>
 
     <tr>
      <td width='650px'>
@@ -452,11 +618,35 @@ expand_collapse_widget($widgetTitle, $widgetLabel, $widgetButtonLabel,
       <br/>
       <div style='margin-left:10px' class='text'><img src='images/ajax-loader.gif'/></div><br/>
       </div>
+
      </td>
     </tr>
+
+<!-- Amendments -->
+<?php if ( $GLOBALS['amendments'] ) { ?>
 	<tr>
-		<td>
-			
+	<td width='650px'>
+<?php
+$widgetTitle = xl("Amendments");
+$widgetLabel = "amendments";
+$widgetButtonLabel = xl("");
+$widgetButtonClass = "hidden";
+$linkMethod = "html";
+$bodyClass = "notab";
+$widgetAuth = false;
+$fixedWidth = true;
+expand_collapse_widget($widgetTitle, $widgetLabel, $widgetButtonLabel,
+  $widgetButtonLink, $widgetButtonClass, $linkMethod, $bodyClass,
+  $widgetAuth, $fixedWidth);
+?>
+
+<br/>
+	<div style='margin-left:10px' class='text'><img src='images/ajax-loader.gif'/></div><br/>
+	</td>
+	</tr>
+<?php } ?>
+    <tr>
+      <td width='650px'>
 <?php
 	// Show current and upcoming appointments.
 	 $query = "SELECT e.pc_eid, e.pc_aid, e.pc_title, e.pc_eventDate, " .
@@ -478,39 +668,41 @@ expand_collapse_widget($widgetTitle, $widgetLabel, $widgetButtonLabel,
         $widgetButtonClass = "edit_event iframe";
 	$linkMethod = "";
 	$bodyClass = "summary_item small";
-        if ($GLOBALS['portal_onsite_appt_modify']) {
-	    $widgetAuth = true;
-        }
-        else {
-            $widgetAuth = false;
-        }
+    if ($GLOBALS['portal_onsite_appt_modify'])
+    {
+      $widgetAuth = true;
+    }
+    else
+    {
+      $widgetAuth = false;
+    }
 	$fixedWidth = false;
-
 	expand_collapse_widget($widgetTitle, $widgetLabel, $widgetButtonLabel , $widgetButtonLink, $widgetButtonClass, $linkMethod, $bodyClass, $widgetAuth, $fixedWidth);
-
 			 $count = 0;
-			 
-			?>
+?>
 			<div id='stats_div' style="display:none">
             	<div style='margin-left:10px' class='text'><img src='images/ajax-loader.gif'/></div>
         	</div>
-
 		</td>
 	</tr>
    </table>
 
-  </div>
+   </div>
 
   </td>
 
  </tr>
+
 </table>
 
 </div> <!-- end main content div -->
 
-<input type="button" style="text-align: right;" value="<? echo xl('Log Out'); ?>" onclick="window.location = 'logout.php'">
+<div id="portal-buttons-bottom"> <!-- buttons bottom div -->
+    <input type="button" style="text-align: right;" value="<?php echo xla('Log Out'); ?>" onclick="window.location = 'logout.php'"/>
 
-</wrapper>
+    <input type="button" style="text-align: right;" value="<?php echo xla('Change Password'); ?>" onclick="window.location = '<?php echo $landingpage."&password_update=1";?>'"/>
+</div><!-- end buttons bottom div -->
 
+</div>
 </body>
 </html>

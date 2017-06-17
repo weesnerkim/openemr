@@ -1,5 +1,5 @@
 <?php
-// +-----------------------------------------------------------------------------+ 
+// +-----------------------------------------------------------------------------+
 // Copyright (C) 2010 Z&H Consultancy Services Private Limited <sam@zhservices.com>
 //
 //
@@ -19,16 +19,53 @@
 // openemr/interface/login/GnuGPL.html
 // For more information write to the Free Software
 // Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
-// 
+//
 // Author:   Eldho Chacko <eldho@zhservices.com>
-//           Paul Simon K <paul@zhservices.com> 
+//           Paul Simon K <paul@zhservices.com>
 //
 // +------------------------------------------------------------------------------+
+
+// Post a payment to the payments table.
+//
+function frontPayment($patient_id, $encounter, $method, $source, $amount1, $amount2, $timestamp, $auth="") {
+
+  if (empty($auth)) {
+    $auth=$_SESSION['authUser'];
+  }
+
+  $tmprow = sqlQuery("SELECT date FROM form_encounter WHERE " .
+    "encounter=? and pid=?",
+                array($encounter,$patient_id));
+        //the manipulation is done to insert the amount paid into payments table in correct order to show in front receipts report,
+        //if the payment is for today's encounter it will be shown in the report under today field and otherwise shown as previous
+  $tmprowArray=explode(' ',$tmprow['date']);
+  if(date('Y-m-d')==$tmprowArray[0])
+   {
+    if($amount1==0)
+         {
+          $amount1=$amount2;
+          $amount2=0;
+         }
+   }
+  else
+   {
+    if($amount2==0)
+         {
+          $amount2=$amount1;
+          $amount1=0;
+         }
+   }
+  $payid = sqlInsert("INSERT INTO payments ( " .
+    "pid, encounter, dtime, user, method, source, amount1, amount2 " .
+    ") VALUES ( ?, ?, ?, ?, ?, ?, ?, ?)", array($patient_id,$encounter,$timestamp,$auth,$method,$source,$amount1,$amount2) );
+  return $payid;
+}
+
 //===============================================================================
 //This section handles the common functins of payment screens.
 //===============================================================================
 function DistributionInsert($CountRow,$created_time,$user_id)
- {//Function inserts the distribution.Payment,Adjustment,Deductable,Takeback & Follow up reasons are inserted as seperate rows.
+ {//Function inserts the distribution.Payment,Adjustment,Deductible,Takeback & Follow up reasons are inserted as seperate rows.
  //It automatically pushes to next insurance for billing.
  //In the screen a drop down of Ins1,Ins2,Ins3,Pat are given.The posting can be done for any level.
 	$Affected='no';
@@ -53,9 +90,14 @@ function DistributionInsert($CountRow,$created_time,$user_id)
 		 {
 		  $AccountCode="PP";
 		 }
+
+	  sqlBeginTrans();
+	  $sequence_no = sqlQuery( "SELECT IFNULL(MAX(sequence_no),0) + 1 AS increment FROM ar_activity WHERE pid = ? AND encounter = ?", array(trim(formData('hidden_patient_code' )), trim(formData("HiddenEncounter$CountRow"   ))));
 	  sqlStatement("insert into ar_activity set "    .
 		"pid = '"       . trim(formData('hidden_patient_code' )) .
 		"', encounter = '"     . trim(formData("HiddenEncounter$CountRow"   ))  .
+		"', sequence_no = '" . $sequence_no['increment'] .
+                "', code_type = '"      . trim(formData("HiddenCodetype$CountRow"   ))  .
 		"', code = '"      . trim(formData("HiddenCode$CountRow"   ))  .
 		"', modifier = '"      . trim(formData("HiddenModifier$CountRow"   ))  .
 		"', payer_type = '"   . trim(formData("HiddenIns$CountRow"   )) .
@@ -67,6 +109,7 @@ function DistributionInsert($CountRow,$created_time,$user_id)
 		"', adj_amount = '"    . 0 .
 		"', account_code = '" . "$AccountCode"  .
 		"'");
+	  sqlCommitTrans();
 	  $Affected='yes';
    }
   if (isset($_POST["AdjAmount$CountRow"]) && $_POST["AdjAmount$CountRow"]*1!=0)
@@ -82,10 +125,13 @@ function DistributionInsert($CountRow,$created_time,$user_id)
 		  $AccountCode="PA";
 		 }
 
-
-	  idSqlStatement("insert into ar_activity set "    .
+	  sqlBeginTrans();
+	  $sequence_no = sqlQuery( "SELECT IFNULL(MAX(sequence_no),0) + 1 AS increment FROM ar_activity WHERE pid = ? AND encounter = ?", array(trim(formData('hidden_patient_code' )), trim(formData("HiddenEncounter$CountRow"   ))));
+	  sqlInsert("insert into ar_activity set "    .
 		"pid = '"       . trim(formData('hidden_patient_code' )) .
 		"', encounter = '"     . trim(formData("HiddenEncounter$CountRow"   ))  .
+		"', sequence_no = '"     . $sequence_no['increment']  .
+                "', code_type = '"      . trim(formData("HiddenCodetype$CountRow"   ))  .
 		"', code = '"      . trim(formData("HiddenCode$CountRow"   ))  .
 		"', modifier = '"      . trim(formData("HiddenModifier$CountRow"   ))  .
 		"', payer_type = '"   . trim(formData("HiddenIns$CountRow"   )) .
@@ -98,13 +144,18 @@ function DistributionInsert($CountRow,$created_time,$user_id)
 		"', memo = '" . "$AdjustString"  .
 		"', account_code = '" . "$AccountCode"  .
 		"'");
+	   sqlCommitTrans();
 	  $Affected='yes';
    }
   if (isset($_POST["Deductible$CountRow"]) && $_POST["Deductible$CountRow"]*1>0)
    {
-	  idSqlStatement("insert into ar_activity set "    .
+	   sqlBeginTrans();
+	   $sequence_no = sqlQuery( "SELECT IFNULL(MAX(sequence_no),0) + 1 AS increment FROM ar_activity WHERE pid = ? AND encounter = ?", array(trim(formData('hidden_patient_code' )), trim(formData("HiddenEncounter$CountRow"   ))));
+	   sqlInsert("insert into ar_activity set "    .
 		"pid = '"       . trim(formData('hidden_patient_code' )) .
 		"', encounter = '"     . trim(formData("HiddenEncounter$CountRow"   ))  .
+		"', sequence_no = '"     . $sequence_no['increment']  .
+                "', code_type = '"      . trim(formData("HiddenCodetype$CountRow"   ))  .
 		"', code = '"      . trim(formData("HiddenCode$CountRow"   ))  .
 		"', modifier = '"      . trim(formData("HiddenModifier$CountRow"   ))  .
 		"', payer_type = '"   . trim(formData("HiddenIns$CountRow"   )) .
@@ -114,16 +165,21 @@ function DistributionInsert($CountRow,$created_time,$user_id)
 		"', modified_time = '"  . trim($created_time					) .
 		"', pay_amount = '" . 0  .
 		"', adj_amount = '"    . 0 .
-		"', memo = '"    . "Deductable $".trim(formData("Deductible$CountRow"   )) .
+		"', memo = '"    . "Deductible $".trim(formData("Deductible$CountRow"   )) .
 		"', account_code = '" . "Deduct"  .
 		"'");
-	  $Affected='yes';		
+	   sqlCommitTrans();
+	  $Affected='yes';
    }
   if (isset($_POST["Takeback$CountRow"]) && $_POST["Takeback$CountRow"]*1>0)
    {
-	  idSqlStatement("insert into ar_activity set "    .
+	   sqlBeginTrans();
+	   $sequence_no = sqlQuery( "SELECT IFNULL(MAX(sequence_no),0) + 1 AS increment FROM ar_activity WHERE pid = ? AND encounter = ?", array(trim(formData('hidden_patient_code' )), trim(formData("HiddenEncounter$CountRow"   ))));
+	   sqlInsert("insert into ar_activity set "    .
 		"pid = '"       . trim(formData('hidden_patient_code' )) .
 		"', encounter = '"     . trim(formData("HiddenEncounter$CountRow"   ))  .
+		"', sequence_no = '"     . $sequence_no['increment']  .
+                "', code_type = '"      . trim(formData("HiddenCodetype$CountRow"   ))  .
 		"', code = '"      . trim(formData("HiddenCode$CountRow"   ))  .
 		"', modifier = '"      . trim(formData("HiddenModifier$CountRow"   ))  .
 		"', payer_type = '"   . trim(formData("HiddenIns$CountRow"   )) .
@@ -135,13 +191,18 @@ function DistributionInsert($CountRow,$created_time,$user_id)
 		"', adj_amount = '"    . 0 .
 		"', account_code = '" . "Takeback"  .
 		"'");
-	  $Affected='yes';		
+	   sqlCommitTrans();
+	  $Affected='yes';
    }
   if (isset($_POST["FollowUp$CountRow"]) && $_POST["FollowUp$CountRow"]=='y')
    {
-	  idSqlStatement("insert into ar_activity set "    .
+	   sqlBeginTrans();
+	   $sequence_no = sqlQuery( "SELECT IFNULL(MAX(sequence_no),0) + 1 AS increment FROM ar_activity WHERE pid = ? AND encounter = ?", array(trim(formData('hidden_patient_code' )), trim(formData("HiddenEncounter$CountRow"   ))));
+	   sqlInsert("insert into ar_activity set "    .
 		"pid = '"       . trim(formData('hidden_patient_code' )) .
 		"', encounter = '"     . trim(formData("HiddenEncounter$CountRow"   ))  .
+		"', sequence_no = '"     . $sequence_no['increment']  .
+                "', code_type = '"      . trim(formData("HiddenCodetype$CountRow"   ))  .
 		"', code = '"      . trim(formData("HiddenCode$CountRow"   ))  .
 		"', modifier = '"      . trim(formData("HiddenModifier$CountRow"   ))  .
 		"', payer_type = '"   . trim(formData("HiddenIns$CountRow"   )) .
@@ -154,18 +215,19 @@ function DistributionInsert($CountRow,$created_time,$user_id)
 		"', follow_up = '"    . "y" .
 		"', follow_up_note = '"    . trim(formData("FollowUpReason$CountRow"   )) .
 		"'");
-	  $Affected='yes';		
+	   sqlCommitTrans();
+	  $Affected='yes';
    }
   if($Affected=='yes')
    {
 	if(trim(formData('type_name'   ))!='patient')
 	 {
-		$ferow = sqlQuery("select last_level_closed from form_encounter  where 
+		$ferow = sqlQuery("select last_level_closed from form_encounter  where
 		pid ='".trim(formData('hidden_patient_code' ))."' and encounter='".trim(formData("HiddenEncounter$CountRow" ))."'");
 		//multiple charges can come.
 		if($ferow['last_level_closed']<trim(formData("HiddenIns$CountRow"   )))
 		 {
-			sqlStatement("update form_encounter set last_level_closed='".trim(formData("HiddenIns$CountRow"   ))."' where 
+			sqlStatement("update form_encounter set last_level_closed='".trim(formData("HiddenIns$CountRow"   ))."' where
 			pid ='".trim(formData('hidden_patient_code' ))."' and encounter='".trim(formData("HiddenEncounter$CountRow" ))."'");
 			//last_level_closed gets increased.
 			//-----------------------------------

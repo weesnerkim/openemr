@@ -1,23 +1,23 @@
 <?php
 
-include_once(dirname(__FILE__) . "/../../includes/config.php");
+require_once $GLOBALS['OE_SITE_DIR'] . "/config.php";
 
 /**
  * class OFX
  *
  */
 class OFX {
-	
+
 	var $billing_array;
 	var $config;
 	/**
 	 * Constructor sets all OFX attributes to their default value
 	 */
-	function OFX($ba = array())	{
+	function __construct($ba = array())	{
 		$this->billing_array = $ba;
 		$this->config = $GLOBALS['oer_config']['ofx'];
 	}
-	
+
 	function get_OFX() {
 		$string = $this->_ofx_header() . "\n";
 		$trns = array();
@@ -40,11 +40,11 @@ class OFX {
 					//echo "\ned: $date_end < " . date("YmdHis",strtotime($trn[$key]['date'])) . "\n";
 					$date_end = date("YmdHis",strtotime($trns[$key]['date']));
 				}
-			}	
+			}
 		}
 		if (!empty($date_start) && !empty($date_end)) {
 			$string .= "<DTSTART>" . $date_start . "\n";
-			$string .= "<DTEND>" . $date_end . "\n";	
+			$string .= "<DTEND>" . $date_end . "\n";
 		}
 		foreach ($trns as $key => $trn) {
 			$string .= "<STMTTRN>\n";
@@ -60,9 +60,9 @@ class OFX {
 			$sum += $trn['amount'];
 		}
 		$string .= $this->_ofx_footer($sum);
-		return $string;	
+		return $string;
 	}
-	
+
 	function _ofx_header() {
 		$string .= "OFXHEADER:100\n";
 		$string .= "DATA:OFXSGML\n";
@@ -82,10 +82,10 @@ class OFX {
 		$string .= "</STATUS>\n";
 		$string .= "<DTSERVER>" . date("YmdHis") . "\n";
 		$string .= "<LANGUAGE>ENG\n";
-		
+
 		//OpenEMR doesn't have a good grasp of timezone so we will need to revisit this later if it causes problems for transaction timestamping
 		$string .= "<DTACCTUP>" . date("YmdHis") . ".000[-8:PST]\n";
-		
+
 		//intuit programs requires the fields below or it won't accept our ofx transactions
 		$string .= "<FI>\n";
 		$string .= "<ORG>Bank of America\n";
@@ -94,10 +94,10 @@ class OFX {
 		$string .= "<INTU.BID>6526\n";
 		$string .= "<INTU.USERID>111111111\n";
 		//end intuit specific fields
-		
+
 		$string .= "</SONRS>\n";
 		$string .= "</SIGNONMSGSRSV1>\n";
-		
+
 		$string .= "<BANKMSGSRSV1>\n";
 		$string .= "<STMTTRNRS>\n";
 		$string .= "<TRNUID>0\n";
@@ -115,7 +115,7 @@ class OFX {
 		$string .= "<BANKTRANLIST>\n";
 		return $string;
 	}
-	
+
 	function _ofx_footer($sum) {
 		$string = "</BANKTRANLIST>\n";
 		$string .= "<LEDGERBAL>\n";
@@ -128,5 +128,5 @@ class OFX {
 		$string .= "</OFX>\n";
 		return $string;
 	}
-} 
+}
 ?>

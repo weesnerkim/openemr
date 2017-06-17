@@ -1,28 +1,25 @@
 <?php
-//  ------------------------------------------------------------------------ //
-//                     Garden State Health Systems                           //
-//                    Copyright (c) 2010 gshsys.com                          //
-//                      <http://www.gshsys.com/>                             //
-//  ------------------------------------------------------------------------ //
-//  This program is free software; you can redistribute it and/or modify     //
-//  it under the terms of the GNU General Public License as published by     //
-//  the Free Software Foundation; either version 2 of the License, or        //
-//  (at your option) any later version.                                      //
-//                                                                           //
-//  You may not change or alter any portion of this comment or credits       //
-//  of supporting developers from this source code or any supporting         //
-//  source code which is considered copyrighted (c) material of the          //
-//  original comment or credit authors.                                      //
-//                                                                           //
-//  This program is distributed in the hope that it will be useful,          //
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of           //
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the            //
-//  GNU General Public License for more details.                             //
-//                                                                           //
-//  You should have received a copy of the GNU General Public License        //
-//  along with this program; if not, write to the Free Software              //
-//  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA //
-//  ------------------------------------------------------------------------ //
+/**
+ * Functions for CCR.
+ *
+ * Copyright (C) 2010 Garden State Health Systems <http://www.gshsys.com/>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Garden State Health Systems <http://www.gshsys.com/>
+ * @link    http://www.open-emr.org
+ */
+
 
 if($_POST['ccrAction'] == 'generate'){
   if(isset($_POST['show_date'])){
@@ -61,9 +58,9 @@ function getMedicationData() {
         lo.title
       FROM prescriptions 
       LEFT JOIN list_options AS lo
-      ON lo.list_id = 'drug_units' AND prescriptions.unit = lo.option_id
+      ON lo.list_id = 'drug_units' AND prescriptions.unit = lo.option_id AND lo.activity = 1
       LEFT JOIN list_options AS lo2
-      ON lo2.list_id = 'drug_form' AND prescriptions.form = lo2.option_id
+      ON lo2.list_id = 'drug_form' AND prescriptions.form = lo2.option_id AND lo2.activity = 1
       WHERE prescriptions.patient_id = ?
       AND prescriptions.date_added BETWEEN ? AND ?
       UNION
@@ -108,9 +105,9 @@ function getMedicationData() {
         lo.title
       FROM prescriptions 
       LEFT JOIN list_options AS lo
-      ON lo.list_id = 'drug_units' AND prescriptions.unit = lo.option_id
+      ON lo.list_id = 'drug_units' AND prescriptions.unit = lo.option_id AND lo.activity = 1
       LEFT JOIN list_options AS lo2
-      ON lo2.list_id = 'drug_form' AND prescriptions.form = lo2.option_id
+      ON lo2.list_id = 'drug_form' AND prescriptions.form = lo2.option_id AND lo2.activity = 1
       WHERE prescriptions.patient_id = ?
       UNION
       SELECT 
@@ -152,7 +149,7 @@ function getImmunizationData() {
     FROM immunizations 
     LEFT JOIN codes ON immunizations.cvx_code = codes.code
     LEFT JOIN code_types ON codes.code_type = code_types.ct_id
-    WHERE immunizations.patient_id = ? AND code_types.ct_key = 'CVX'
+    WHERE immunizations.patient_id = ? AND code_types.ct_key = 'CVX' AND immunizations.added_erroneously = 0
     AND create_date BETWEEN ? AND ?" ;
     $result = sqlStatement($sql, array($pid,$start,$end) );
   }else{
@@ -167,7 +164,7 @@ function getImmunizationData() {
     FROM immunizations 
     LEFT JOIN codes ON immunizations.cvx_code = codes.code
     LEFT JOIN code_types ON codes.code_type = code_types.ct_id
-    WHERE immunizations.patient_id = ? AND code_types.ct_key = 'CVX'";
+    WHERE immunizations.patient_id = ? AND immunizations.added_erroneously = 0 AND code_types.ct_key = 'CVX'";
     $result = sqlStatement($sql, array($pid) );
   }
 	return $result;
@@ -200,7 +197,7 @@ function getProcedureData() {
         ON form_encounter.provider_id = users.id 
       LEFT JOIN list_options
         ON lists.outcome = list_options.option_id
-        AND list_options.list_id = 'outcome'
+        AND list_options.list_id = 'outcome' AND list_options.activity = 1
     WHERE lists.type = 'surgery' 
       AND lists.pid = ?
       AND lists.date BETWEEN ? AND ?
@@ -220,14 +217,19 @@ function getProcedureData() {
         ON prs.procedure_report_id = prp.procedure_report_id 
       LEFT JOIN procedure_order AS po 
         ON prp.procedure_order_id = po.procedure_order_id 
+      LEFT JOIN procedure_order_code AS poc
+        ON poc.procedure_order_id = po.procedure_order_id
+        AND poc.procedure_order_seq = prp.procedure_order_seq
       LEFT JOIN procedure_type AS pt 
-        ON prs.procedure_type_id = pt.procedure_type_id 
+        ON pt.lab_id = po.lab_id
+        AND pt.procedure_code = prs.result_code
+        AND pt.procedure_type = 'res'
       LEFT JOIN procedure_type AS ptt 
         ON pt.parent = ptt.procedure_type_id 
         AND ptt.procedure_type = 'ord' 
       LEFT JOIN list_options AS lo 
         ON lo.list_id = 'proc_unit' 
-        AND pt.units = lo.option_id 
+        AND pt.units = lo.option_id AND lo.activity = 1
     WHERE po.patient_id = ?
     AND prs.date BETWEEN ? AND ?";
   
@@ -255,7 +257,7 @@ function getProcedureData() {
         ON form_encounter.provider_id = users.id 
       LEFT JOIN list_options
         ON lists.outcome = list_options.option_id
-        AND list_options.list_id = 'outcome'
+        AND list_options.list_id = 'outcome' AND list_options.activity = 1
     WHERE lists.type = 'surgery' 
       AND lists.pid = ? 
     UNION
@@ -273,15 +275,20 @@ function getProcedureData() {
       LEFT JOIN procedure_report AS prp 
         ON prs.procedure_report_id = prp.procedure_report_id 
       LEFT JOIN procedure_order AS po 
-        ON prp.procedure_order_id = po.procedure_order_id 
+        ON prp.procedure_order_id = po.procedure_order_id
+      LEFT JOIN procedure_order_code AS poc
+        ON poc.procedure_order_id = po.procedure_order_id
+        AND poc.procedure_order_seq = prp.procedure_order_seq
       LEFT JOIN procedure_type AS pt 
-        ON prs.procedure_type_id = pt.procedure_type_id 
+        ON pt.lab_id = po.lab_id
+        AND pt.procedure_code = prs.result_code
+        AND pt.procedure_type = 'res'
       LEFT JOIN procedure_type AS ptt 
         ON pt.parent = ptt.procedure_type_id 
         AND ptt.procedure_type = 'ord' 
       LEFT JOIN list_options AS lo 
         ON lo.list_id = 'proc_unit' 
-        AND pt.units = lo.option_id 
+        AND pt.units = lo.option_id AND lo.activity = 1
     WHERE po.patient_id = ? ";
   
     $result = sqlStatement($sql, array($pid,$pid) );
@@ -292,35 +299,41 @@ function getProcedureData() {
 
 function getProblemData() {
 
+  # Note we are hard-coding (only allowing) problems that have been coded to ICD9. Would
+  #  be easy to upgrade this to other codesets in future (ICD10,SNOMED) by using already
+  #  existant flags in the code_types table.
+  # Additionally, only using problems that have one diagnosis code set in diagnosis field.
+  #  Note OpenEMR allows multiple codes set per problem, but will limit to showing only
+  #  problems with one diagnostic code set in order to maintain previous behavior
+  #  (this will likely need to be dealt with at some point; ie. support multiple dx codes per problem).
+
 	global $pid,$set,$start,$end;
   if($set == "on"){
     $sql = " 
     SELECT fe.encounter, fe.reason, fe.provider_id, u.title, u.fname, u.lname, 
       fe.facility_id, f.street, f.city, f.state, ie.list_id, l.pid, l.title AS prob_title, l.diagnosis, 
-      l.outcome, l.groupname, l.begdate, l.enddate, l.type, l.comments , l.date, cd.code_text
+      l.outcome, l.groupname, l.begdate, l.enddate, l.type, l.comments , l.date
     FROM lists AS l 
     LEFT JOIN issue_encounter AS ie ON ie.list_id = l.id
     LEFT JOIN form_encounter AS fe ON fe.encounter = ie.encounter
     LEFT JOIN facility AS f ON fe.facility_id = f.id
     LEFT JOIN users AS u ON fe.provider_id = u.id
-    LEFT JOIN codes AS cd ON cd.code = SUBSTRING(l.diagnosis, LOCATE(':',l.diagnosis)+1)
-    LEFT JOIN code_types AS ct ON ct.ct_id = cd.code_type
-    WHERE l.type = 'medical_problem' AND l.pid=? AND ct.ct_key = SUBSTRING(l.diagnosis, 1, LOCATE(':',l.diagnosis)-1)
+    WHERE l.type = 'medical_problem' AND l.pid=? AND l.diagnosis LIKE 'ICD9:%'
+    AND l.diagnosis NOT LIKE '%;%'
     AND l.date BETWEEN ? AND ?";
     $result = sqlStatement($sql, array($pid,$start,$end) );
   }else{
     $sql = " 
     SELECT fe.encounter, fe.reason, fe.provider_id, u.title, u.fname, u.lname, 
       fe.facility_id, f.street, f.city, f.state, ie.list_id, l.pid, l.title AS prob_title, l.diagnosis, 
-      l.outcome, l.groupname, l.begdate, l.enddate, l.type, l.comments , l.date, cd.code_text
+      l.outcome, l.groupname, l.begdate, l.enddate, l.type, l.comments , l.date
     FROM lists AS l 
     LEFT JOIN issue_encounter AS ie ON ie.list_id = l.id
     LEFT JOIN form_encounter AS fe ON fe.encounter = ie.encounter
     LEFT JOIN facility AS f ON fe.facility_id = f.id
     LEFT JOIN users AS u ON fe.provider_id = u.id
-    LEFT JOIN codes AS cd ON cd.code = SUBSTRING(l.diagnosis, LOCATE(':',l.diagnosis)+1)
-    LEFT JOIN code_types AS ct ON ct.ct_id = cd.code_type
-    WHERE l.type = 'medical_problem' AND l.pid=? AND ct.ct_key = SUBSTRING(l.diagnosis, 1, LOCATE(':',l.diagnosis)-1)";
+    WHERE l.type = 'medical_problem' AND l.pid=? AND l.diagnosis LIKE 'ICD9:%'
+    AND l.diagnosis NOT LIKE '%;%'";
     $result = sqlStatement($sql, array($pid) );
   }
 	return $result;
@@ -399,13 +412,18 @@ function getResultData() {
           ON prs.procedure_report_id = prp.procedure_report_id 
         LEFT JOIN procedure_order AS po 
           ON prp.procedure_order_id = po.procedure_order_id
+        LEFT JOIN procedure_order_code AS poc
+          ON poc.procedure_order_id = po.procedure_order_id
+          AND poc.procedure_order_seq = prp.procedure_order_seq
         LEFT JOIN procedure_type AS pt 
-          ON prs.procedure_type_id = pt.procedure_type_id
-          LEFT JOIN procedure_type AS ptt 
+          ON pt.lab_id = po.lab_id
+          AND pt.procedure_code = prs.result_code
+          AND pt.procedure_type = 'res'
+        LEFT JOIN procedure_type AS ptt 
           ON pt.parent = ptt.procedure_type_id
           AND ptt.procedure_type = 'ord'
         LEFT JOIN list_options AS lo
-          ON lo.list_id = 'proc_unit' AND pt.units = lo.option_id
+          ON lo.list_id = 'proc_unit' AND pt.units = lo.option_id AND lo.activity = 1
       WHERE po.patient_id=?
       AND prs.date BETWEEN ? AND ?";
 		
@@ -428,13 +446,18 @@ function getResultData() {
           ON prs.procedure_report_id = prp.procedure_report_id 
         LEFT JOIN procedure_order AS po 
           ON prp.procedure_order_id = po.procedure_order_id
+        LEFT JOIN procedure_order_code AS poc
+          ON poc.procedure_order_id = po.procedure_order_id
+          AND poc.procedure_order_seq = prp.procedure_order_seq
         LEFT JOIN procedure_type AS pt 
-          ON prs.procedure_type_id = pt.procedure_type_id
-          LEFT JOIN procedure_type AS ptt 
+          ON pt.lab_id = po.lab_id
+          AND pt.procedure_code = prs.result_code
+          AND pt.procedure_type = 'res'
+        LEFT JOIN procedure_type AS ptt 
           ON pt.parent = ptt.procedure_type_id
           AND ptt.procedure_type = 'ord'
         LEFT JOIN list_options AS lo
-          ON lo.list_id = 'proc_unit' AND pt.units = lo.option_id
+          ON lo.list_id = 'proc_unit' AND pt.units = lo.option_id AND lo.activity = 1
       WHERE po.patient_id=?";
 		
     $result = sqlStatement($sql, array($pid) );
@@ -460,21 +483,20 @@ function getActorData() {
   
   $sql3 = "
   SELECT 
-    u.*
+    u.ppid AS id, u.name AS lname, '' AS fname, '' AS city, '' AS state, '' AS zip, '' AS phone
   FROM
-    procedure_type AS pt 
-    LEFT JOIN procedure_order AS po 
-      ON po.procedure_type_id = pt.procedure_type_id 
-    LEFT JOIN forms AS f 
+    procedure_order AS po 
+    LEFT JOIN forms AS f
       ON f.form_id = po.procedure_order_id 
+      AND f.formdir = 'procedure_order'
     LEFT JOIN list_options AS lo 
-      ON lo.title = f.form_name
-    LEFT JOIN users AS u
-    ON pt.lab_id = u.id
+      ON lo.title = f.form_name AND lo.activity = 1
+    LEFT JOIN procedure_providers AS u
+      ON po.lab_id = u.ppid
   WHERE f.pid = ? 
     AND lo.list_id = 'proc_type' 
     AND lo.option_id = 'ord'
-    GROUP BY u.id";
+    GROUP BY u.ppid";
 		
 	$result[2] = sqlStatement($sql3, array($pid) );
   

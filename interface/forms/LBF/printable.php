@@ -1,10 +1,12 @@
 <?php
-// Copyright (C) 2009 Rod Roark <rod@sunsetsystems.com>
+// Copyright (C) 2009-2017 Rod Roark <rod@sunsetsystems.com>
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
+
+
 
 require_once("../../globals.php");
 require_once("$srcdir/acl.inc");
@@ -14,15 +16,28 @@ require_once("$srcdir/patient.inc");
 $CPR = 4; // cells per row
 
 // The form name is passed to us as a GET parameter.
-$formname = formData('formname', 'G');
+$formname = isset($_GET['formname']) ? $_GET['formname'] : '';
 
-$tmp = sqlQuery("SELECT title FROM list_options WHERE " .
-  "list_id = 'lbfnames' AND option_id = '$formname' LIMIT 1");
+$tmp = sqlQuery("SELECT title, notes FROM list_options WHERE " .
+  "list_id = 'lbfnames' AND option_id = ? AND activity = 1 LIMIT 1", array($formname));
 $formtitle = $tmp['title'];
 
+// Extract parameters from this form's list item entry.
+$jobj = json_decode($tmp['notes'], true);
+if (!empty($jobj['columns'])) $CPR = intval($jobj['columns']);
+if (!empty($jobj['size'   ])) $FONTSIZE = intval($jobj['size']);
+
+// Check access control.
+if (!empty($jobj['aco'])) $LBF_ACO = explode('|', $jobj['aco']);
+if (!acl_check('admin', 'super') && !empty($LBF_ACO)) {
+  if (!acl_check($LBF_ACO[0], $LBF_ACO[1])) {
+    die(xlt('Access denied'));
+  }
+}
+
 $fres = sqlStatement("SELECT * FROM layout_options " .
-  "WHERE form_id = '$formname' AND uor > 0 " .
-  "ORDER BY group_name, seq");
+  "WHERE form_id = ? AND uor > 0 " .
+  "ORDER BY group_name, seq", array($formname) );
 ?>
 <html>
 <head>
@@ -88,9 +103,9 @@ div.section {
 <?php echo genFacilityTitle($formtitle, -1); ?>
 
 <span class='subhead'>
- <?php xl('Patient','e') ?>: ________________________________________ &nbsp;
- <?php xl('Clinic','e') ?>: ____________________ &nbsp;
- <?php xl('Date','e') ?>: ____________________<br />&nbsp;<br />
+ <?php echo xlt('Patient') ?>: ________________________________________ &nbsp;
+ <?php echo xlt('Clinic') ?>: ____________________ &nbsp;
+ <?php echo xlt('Date') ?>: ____________________<br />&nbsp;<br />
 </span>
 
 <?php
@@ -143,7 +158,7 @@ while ($frow = sqlFetchArray($fres)) {
     if (strlen($last_group) > 0) echo "<br />\n";
     $group_name = substr($this_group, 1);
     $last_group = $this_group;
-    echo "<b>" . xl_layout_label($group_name) . "</b>\n";
+    echo "<b>" . text(xl_layout_label($group_name)) . "</b>\n";
       
     echo "<div class='section'>\n";
     echo " <table border='0' cellpadding='0'>\n";
@@ -160,7 +175,7 @@ while ($frow = sqlFetchArray($fres)) {
   // Handle starting of a new label cell.
   if ($titlecols > 0) {
     end_cell();
-    echo "<td colspan='$titlecols' width='10%'";
+    echo "<td colspan='" . attr($titlecols) . "' width='10%'";
     echo ($frow['uor'] == 2) ? " class='required'" : " class='bold'";
     if ($cell_count == 2) echo " style='padding-left:10pt'";
     echo ">";
@@ -170,14 +185,14 @@ while ($frow = sqlFetchArray($fres)) {
 
   echo "<b>";
     
-  if ($frow['title']) echo (xl_layout_label($frow['title']) . ":"); else echo "&nbsp;";
+  if ($frow['title']) echo (text(xl_layout_label($frow['title'])) . ":"); else echo "&nbsp;";
 
   echo "</b>";
 
   // Handle starting of a new data cell.
   if ($datacols > 0) {
     end_cell();
-    echo "<td colspan='$datacols' width='40%'";
+    echo "<td colspan='" . attr($datacols) . "' width='40%'";
     if ($data_type < 21 || $data_type > 25) echo " class='under'";
     if ($cell_count > 0) echo " style='padding-left:5pt;'";
     echo ">";
@@ -195,7 +210,8 @@ end_group();
 
 <!-- This should really be in the onload handler but that seems to be unreliable and can crash Firefox 3. -->
 <script language='JavaScript'>
-window.print();
+ var win = top.printLogPrint ? top : opener.top;
+ win.printLogPrint(window);
 </script>
 
 </body>

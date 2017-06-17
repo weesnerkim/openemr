@@ -16,22 +16,22 @@ $form_name = "My Example Form";
 $form_folder = "example";
 
 formHeader("Form: ".$form_name);
-$returnurl = $GLOBALS['concurrent_layout'] ? 'encounter_top.php' : 'patient_encounter.php';
+$returnurl = 'encounter_top.php';
 
 /* load the saved record */
 $record = formFetch($table_name, $_GET["id"]);
 
 /* remove the time-of-day from the date fields */
 if ($record['form_date'] != "") {
-    $dateparts = split(" ", $record['form_date']);
+    $dateparts = explode(" ", $record['form_date']);
     $record['form_date'] = $dateparts[0];
 }
 if ($record['dob'] != "") {
-    $dateparts = split(" ", $record['dob']);
+    $dateparts = explode(" ", $record['dob']);
     $record['dob'] = $dateparts[0];
 }
 if ($record['sig_date'] != "") {
-    $dateparts = split(" ", $record['sig_date']);
+    $dateparts = explode(" ", $record['sig_date']);
     $record['sig_date'] = $dateparts[0];
 }
 ?>
@@ -40,7 +40,7 @@ if ($record['sig_date'] != "") {
 <?php html_header_show();?>
 
 <!-- supporting javascript code -->
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-3-1-1/index.js"></script>
 <script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/textformat.js"></script>
 
 <!-- page styles -->

@@ -25,13 +25,7 @@
 //
 // +------------------------------------------------------------------------------+
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 class existingpatient {
     
@@ -101,7 +95,6 @@ class existingpatient {
             break;
             
             case 'A5':
-            include_once('../../library/formdata.inc.php');
             $enc_set_array=array();
             $enc_set_array[]=$pid;
             if($data[1][1]=='' && $data[1][2]>0)
@@ -110,7 +103,7 @@ class existingpatient {
             $enc_set_array[]=$data[1][2];
             }
             $provider="";
-            $provider  =add_escape_custom($data[1][0]);  
+            $provider  =add_escape_custom($data[1][0]);
             $query="select fe.id,fe.pid,encounter,date_format(fe.date,'%Y-%m-%d') 
             as date,concat(pd.lname,' ',pd.fname) as patname,concat(u.lname,', ',u.fname) 
             as provname,".$provider." from form_encounter fe left outer join users u
@@ -164,7 +157,7 @@ class existingpatient {
                 return array($query,array($pid,'pre_payment'));
             break;
             case 'A10':
-                $query = "SELECT sum(pay_total)  as pay_amount FROM ar_session,ar_activity WHERE patient_id=? AND adjustment_code=?
+                $query = "SELECT sum(pay_amount)  as pay_amount FROM ar_session,ar_activity WHERE patient_id=? AND adjustment_code=?
                           AND pid=? AND ar_session.session_id=ar_activity.session_id  and pay_amount>0";
                 return array($query,array($pid,'pre_payment',$pid));
             break;
@@ -173,7 +166,7 @@ class existingpatient {
                 return array($query,array($pid,'pre_payment'));
             break;
             case 'A12':
-                $query = "SELECT sum(pay_total)  as pay_amount FROM ar_session,ar_activity WHERE patient_id=? AND adjustment_code!=?
+                $query = "SELECT sum(pay_amount)  as pay_amount FROM ar_session,ar_activity WHERE patient_id=? AND adjustment_code!=?
                           AND pid=? AND ar_session.session_id=ar_activity.session_id  and pay_amount>0";
                 return array($query,array($pid,'pre_payment',$pid));
             break;
@@ -231,7 +224,7 @@ class existingpatient {
             return array($query,array($pid));
             break;
             // Demo building from layout options.
-            
+
             case 'P7':
                 $query=" select * from layout_options WHERE form_id = 'DEM' AND uor > 0 AND field_id != '' " .
                 "ORDER BY group_name, seq";
@@ -258,12 +251,12 @@ class existingpatient {
             return array($query,$data[1]);
             break;
         
-            case 'P11':	
+            case 'P11':
             $query = "select code_text from codes WHERE  code = ? ";
             return array($query,$data[1]);
             break;
 			//Details of drug sales
-            case 'P12':	
+            case 'P12':
             array_push($data[1],$pid);
              $query = "select s.drug_id, s.sale_date, s.fee, s.quantity from drug_sales AS s " .
                 "WHERE  s.encounter = ? and s.pid = ? AND s.fee != 0 " .
@@ -271,7 +264,7 @@ class existingpatient {
             return array($query,$data[1]);
             break;
 			//Details of Payments
-            case 'P14':	
+            case 'P14':
             array_push($data[1],$pid);
                     $query = "Select a.code, a.modifier, a.memo, a.payer_type, a.adj_amount, a.pay_amount, " .
                 "a.post_time, a.session_id, a.sequence_no,a.follow_up, a.follow_up_note, " .
@@ -284,30 +277,30 @@ class existingpatient {
             return array($query,$data[1]);
             break;
 			//Address of Billing Facility
-            case 'P15':	
+            case 'P15':
             $query = "SELECT f.name,f.street,f.city,f.state,f.postal_code,f.phone from facility f " .
             " where  id=?";
             return array($query,$data[1]);
             break;
             //Encounter status primary,secondary Etc
-            case 'P16':	
+            case 'P16':
             array_push($data[1],$pid);
             $query = "select last_level_closed from form_encounter where encounter= ? and pid =? ";
             return array($query,$data[1]);
             break;
         
-            case 'P17':	
+            case 'P17':
             $query = "select COUNT( DISTINCT TYPE ) NumberOfInsurance from insurance_data where pid =? and provider>0 ";
             return array($query,array($pid));
             break;
         
-            case 'P19':	
+            case 'P19':
             $query = "select  date,encounter from form_encounter where pid =? ORDER BY encounter";
             return array($query,array($pid));
             break;
         
-            case 'P20':	
-            if($pid) 
+            case 'P20':
+            if($pid)
              {
               $string_query=" and pid !=?";
              }
@@ -324,8 +317,8 @@ class existingpatient {
             break;
         
 			//getting DOB and SSN for verifying the duplicate patient existance
-            case 'P21':	
-            if($pid) 
+            case 'P21':
+            if($pid)
              {
               $string_query=" and pid !=?";
              }
@@ -342,7 +335,7 @@ class existingpatient {
             break;
         
 			//master data for calendar from Globals
-            case 'B1':    
+            case 'B1':
             //patient appointment
             if($data[1][0]=='calendar_interval'||$data[1][0]=='schedule_start'||$data[1][0]=='schedule_end')
             {
@@ -387,7 +380,6 @@ class existingpatient {
             
             case 'B8':
             //List of Service Facility
-            include_once('../../library/formdata.inc.php');
             $query="select * from facility where service_location != 0 and id in (".add_escape_custom($data[1][0]).") order by name";
             return array($query);
             break;
@@ -433,14 +425,14 @@ class existingpatient {
                             break;
                         
             case 'C2':
-                    $query = "SELECT option_id, title FROM list_options WHERE list_id = ? ORDER BY seq";
+                    $query = "SELECT option_id, title FROM list_options WHERE list_id = ? AND activity = 1 ORDER BY seq";
                             return array($query,$data[1]);
                             break;
             
             //D series for patient.
             case 'D1':
                     $query = "SELECT forms.encounter, forms.form_id, forms.id, forms.form_name, forms.formdir,forms.date AS fdate,
-                    form_encounter.date ,form_encounter.reason FROM forms LEFT OUTER JOIN form_encounter ON  forms.pid=form_encounter.pid
+                    form_encounter.date ,form_encounter.reason FROM forms LEFT OUTER JOIN form_encounter ON  forms.pid=form_encounter.pid AND forms.`form_id` = form_encounter.`id`  
                     WHERE forms.pid = ? AND forms.deleted=0 AND forms.formdir<>? GROUP BY id ORDER BY forms.encounter,fdate  ASC";
                     array_unshift($data[1],$pid);
                             return array($query,$data[1]);
@@ -461,6 +453,23 @@ class existingpatient {
                             array_unshift($data[1],$pid);
                             return array($query,$data[1]);
                             break;
+												
+						case 'D5':
+                    $query = " SELECT po.procedure_order_id,po.date_ordered,pt1.procedure_type_id AS order_type_id,pt1.name AS procedure_name,ptrc.name AS result_category_name,
+                               pt2.procedure_type AS result_type,pt2.procedure_type_id AS result_type_id,pt2.name AS result_name,pt2.units AS result_def_units,
+                               pt2.range AS result_def_range,pt2.description AS result_description,lo.title AS units_name,pr.procedure_report_id,pr.date_report,
+                               pr.date_collected,pr.specimen_num,pr.report_status,pr.review_status,ps.procedure_result_id,ps.abnormal,ps.result,ps.range,ps.result_status,
+                               ps.facility,ps.comments FROM procedure_order AS po LEFT JOIN procedure_order_code pc ON pc.procedure_order_id = po.`procedure_order_id`
+                               LEFT JOIN procedure_type AS pt1 ON pt1.lab_id = po.`lab_id` AND pt1.procedure_code = pc.procedure_code LEFT JOIN procedure_type AS ptrc 
+                               ON ptrc.procedure_type_id = pt1.parent AND ptrc.procedure_type LIKE 'grp%' LEFT JOIN procedure_type AS pt2 ON ((ptrc.procedure_type_id IS NULL 
+                               AND (pt2.parent = pt1.procedure_type_id OR pt2.procedure_type_id = pt1.procedure_type_id)) OR (pt2.procedure_type_id IS NOT NULL 
+                               AND pt2.parent = pt1.procedure_type_id )) AND (pt2.procedure_type LIKE 'res%' OR pt2.procedure_type LIKE 'rec%') LEFT JOIN list_options AS lo 
+                               ON list_id = 'proc_unit' AND option_id = pt2.units AND lo.activity = 1 LEFT JOIN procedure_report AS pr ON pr.procedure_order_id = po.procedure_order_id 
+                               LEFT JOIN procedure_result AS ps ON ps.procedure_report_id = pr.procedure_report_id WHERE po.patient_id = ? 
+                               ORDER BY po.date_ordered,po.procedure_order_id,pr.procedure_report_id,ptrc.seq,ptrc.name,ptrc.procedure_type_id,pt2.seq,pt2.name,
+                               pt2.procedure_type_id ";
+                            return array($query,array($pid));
+                            break;
             
             //G series for form menu inc
             case 'G1':
@@ -470,7 +479,7 @@ class existingpatient {
                         
             case 'G2':
                     $query = "SELECT * FROM documents_legal_master AS dlm WHERE dlm_subcategory <> ? and dlm_effective_date <= now() AND
-                    dlm_effective_date<>? AND dlm_document_id Not IN (SELECT distinct(dld_master_docid) FROM documents_legal_detail WHERE
+                    dlm_effective_date<>? AND dlm_upload_type = '0' AND dlm_document_id Not IN (SELECT distinct(dld_master_docid) FROM documents_legal_detail WHERE
                     dld_id IS NOT NULL AND dld_pid=?)";
                             array_push($data[1],$pid);
                             return array($query,$data[1]);
@@ -498,6 +507,13 @@ class existingpatient {
                     JOIN form_encounter as fe ON encounter=dld_encounter WHERE dlm_subcategory = ? and dlm_effective_date <= now() AND
                     dlm_effective_date<>? AND dld_id IS NOT NULL AND dld_filename != '' AND dld_pid=? GROUP BY dld_encounter,dlm_document_id
                     ORDER BY dld_id DESC";
+                            array_push($data[1],$pid);
+                            return array($query,$data[1]);
+                            break;
+            case 'G6':
+                    $query = "SELECT * FROM documents_legal_master AS dlm LEFT OUTER JOIN documents_legal_detail as dld ON
+                    dlm_document_id=dld_master_docid WHERE dlm_subcategory <> ? and dlm_effective_date <= now() AND dlm_effective_date<>?
+                    AND dld_id IS NOT NULL AND (dld_signed = ? OR dlm_upload_type = '1') AND dld_pid=? ORDER BY dlm_effective_date DESC";
                             array_push($data[1],$pid);
                             return array($query,$data[1]);
                             break;
@@ -560,6 +576,16 @@ class existingpatient {
             //Checking whether a new patient entry is pending in the audit master
             case 'J2':
             $query = "SELECT pid FROM audit_master WHERE approval_status=1 and type=1 and pid=?";
+            return array($query,array($pid));
+            break;
+            
+            case 'payment_settings':
+            $query = "SELECT login_id,transaction_key,md5 FROM payment_gateway_details WHERE service_name=?";
+            return array($query,$data[1]);
+            break;
+            
+            case 'authorizenet_id':
+            $query = "SELECT authorize_net_id FROM patient_access_offsite WHERE pid=?";
             return array($query,array($pid));
             break;
         }

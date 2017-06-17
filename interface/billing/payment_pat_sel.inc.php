@@ -45,13 +45,13 @@ if (isset($_POST["mode"]))
 	 {
 	  $StringForQuery=" and last_level_closed >= 1 ";
 	 }
-	$ResultSearchNew = sqlStatement("SELECT billing.id,last_level_closed,billing.encounter,form_encounter.`date`,billing.code,billing.modifier,fee
-	 FROM billing ,form_encounter
-			 where billing.encounter=form_encounter.encounter and code_type!='ICD9' and  code_type!='COPAY' and billing.activity!=0 and
-			 form_encounter.pid ='$hidden_patient_code' and billing.pid ='$hidden_patient_code'  $StringForQuery ORDER BY form_encounter.`date`, 
-			 form_encounter.encounter,billing.code,billing.modifier");
+	$ResultSearchNew = sqlStatement("SELECT b.id,last_level_closed,b.encounter,fe.`date`,b.code_type,b.code,b.modifier,fee
+	                                 FROM billing AS b,form_encounter AS fe, code_types AS ct
+			                         WHERE b.encounter=fe.encounter AND b.code_type=ct.ct_key AND ct.ct_diag=0 
+			                         AND b.activity!=0 AND fe.pid ='$hidden_patient_code' AND b.pid ='$hidden_patient_code' 
+			                         $StringForQuery ORDER BY fe.`date`, fe.encounter,b.code,b.modifier");
 	$res = sqlStatement("SELECT fname,lname,mname FROM patient_data
-			where pid ='".$_REQUEST['hidden_patient_code']."'");
+			             where pid ='".$_REQUEST['hidden_patient_code']."'");
 	$row = sqlFetchArray($res);
 		$fname=$row['fname'];
 		$lname=$row['lname'];
@@ -79,7 +79,7 @@ if (isset($_POST["mode"]))
 				<td width="55" colspan="2" style="padding-left:5px;" ><div  class="text" name="patient_name" id="patient_name"  
 				style="border:1px solid black; ; padding-left:5px; width:55px; height:17px;"><?php echo $Message=='' ? htmlspecialchars(formData('hidden_patient_code')) : '' ;?></div>
 				</td>
-				<td width="84" class="text">&nbsp;<input type="radio" name="RadioPaid" onClick="SearchOnceMore()" <?php echo $_REQUEST['RadioPaid']=='Non_Paid' 
+				<td width="84" class="text">&nbsp;<input type="radio" name="RadioPaid" onClick="SearchOnceMore()" <?php echo $_REQUEST['RadioPaid']=='Non_Paid'
 				|| $_REQUEST['RadioPaid']=='' ? 'checked' : '' ; ?>  value="Non_Paid" id="Non_Paid"  /><?php echo htmlspecialchars( xl('Non Paid'), ENT_QUOTES) ?></td>
 				<td width="168" class="text"><input type="radio" name="RadioPaid" onClick="SearchOnceMore()" 
 				<?php echo $_REQUEST['RadioPaid']=='Show_Primary_Complete' ? 'checked' : '' ; ?>  value="Show_Primary_Complete" 
@@ -128,7 +128,7 @@ if (isset($_POST["mode"]))
 				<td width="55" class="left top" ><?php echo htmlspecialchars( xl('Post For'), ENT_QUOTES) ?></td>
 				<td width="80" class="left top" ><?php echo htmlspecialchars( xl('Service Date'), ENT_QUOTES) ?></td>
 				<td width="65" class="left top" ><?php echo htmlspecialchars( xl('Encounter'), ENT_QUOTES) ?></td>
-				<td width="70" class="left top" ><?php echo htmlspecialchars( xl('CPT Code'), ENT_QUOTES) ?></td>
+				<td width="70" class="left top" ><?php echo htmlspecialchars( xl('Service Code'), ENT_QUOTES) ?></td>
 				<td width="55" class="left top" ><?php echo htmlspecialchars( xl('Charge'), ENT_QUOTES) ?></td>
 				<td width="40" class="left top" ><?php echo htmlspecialchars( xl('Copay'), ENT_QUOTES) ?></td>
 				<td width="45" class="left top" ><?php echo htmlspecialchars( xl('Remdr'), ENT_QUOTES) ?></td>
@@ -142,7 +142,7 @@ if (isset($_POST["mode"]))
 				<td width="209" class="left top right" ><?php echo htmlspecialchars( xl('Follow Up Reason'), ENT_QUOTES) ?></td>
 			  </tr>
 			  <?php
-				do 
+				do
 				 {
 
 					$CountIndex++;
@@ -168,8 +168,9 @@ if (isset($_POST["mode"]))
 					 }
 
 
-					$ServiceDateArray=split(' ',$RowSearch['date']);
+					$ServiceDateArray=explode(' ',$RowSearch['date']);
 					$ServiceDate=oeFormatShortDate($ServiceDateArray[0]);
+                                        $Codetype=$RowSearch['code_type'];
 					$Code=$RowSearch['code'];
 					$Modifier =$RowSearch['modifier'];
 					if($Modifier!='')
@@ -181,8 +182,10 @@ if (isset($_POST["mode"]))
 					
 					//Always associating the copay to a particular charge.
 					$BillingId=$RowSearch['id'];
-					$resId = sqlStatement("SELECT id  FROM billing where code_type!='ICD9' and  code_type!='COPAY'  and
-					pid ='$hidden_patient_code' and  encounter  ='$Encounter' and billing.activity!=0 order by id");
+					$resId = sqlStatement("SELECT b.id FROM billing AS b, code_types AS ct 
+					                       WHERE b.code_type=ct.ct_key AND ct.ct_diag=0 AND
+					                       b.pid='$hidden_patient_code' AND b.encounter='$Encounter' 
+					                       AND b.activity!=0 ORDER BY id");
 					$rowId = sqlFetchArray($resId);
 					$Id=$rowId['id'];
 
@@ -199,23 +202,21 @@ if (isset($_POST["mode"]))
 						
 						$resMoneyGot = sqlStatement("SELECT sum(pay_amount) as PatientPay FROM ar_activity where
 						pid ='$hidden_patient_code'  and  encounter  ='$Encounter' and  payer_type=0 and 
-						(code='CO-PAY' or account_code='PCP')");//new fees screen copay gives account_code='PCP'
-						//openemr payment screen copay gives code='CO-PAY'
+						account_code='PCP'");//new fees screen copay gives account_code='PCP'
 						$rowMoneyGot = sqlFetchArray($resMoneyGot);
 						$PatientPay=$rowMoneyGot['PatientPay'];
 						
 						$Copay=$Copay+$PatientPay;
 					 }
-						//payer_type!=0
+						//payer_type!=0, supports both mapped and unmapped code_type in ar_activity
 						$resMoneyGot = sqlStatement("SELECT sum(pay_amount) as MoneyGot FROM ar_activity where
-						pid ='$hidden_patient_code' and  code='$Code' and modifier='$Modifier'  and  encounter  ='$Encounter' and  !(payer_type=0 and 
-						(code='CO-PAY' or account_code='PCP'))");//new fees screen copay gives account_code='PCP'
-						//openemr payment screen copay gives code='CO-PAY'
+						pid ='$hidden_patient_code' and (code_type='$Codetype' or code_type='') and code='$Code' and modifier='$Modifier'  and  encounter  ='$Encounter' and  !(payer_type=0 and 
+						account_code='PCP')");//new fees screen copay gives account_code='PCP'
 						$rowMoneyGot = sqlFetchArray($resMoneyGot);
 						$MoneyGot=$rowMoneyGot['MoneyGot'];
-
+                                                //supports both mapped and unmapped code_type in ar_activity
 						$resMoneyAdjusted = sqlStatement("SELECT sum(adj_amount) as MoneyAdjusted FROM ar_activity where
-						pid ='$hidden_patient_code' and  code='$Code' and modifier='$Modifier'  and  encounter  ='$Encounter'");
+						pid ='$hidden_patient_code' and (code_type='$Codetype' or code_type='') and code='$Code' and modifier='$Modifier'  and  encounter  ='$Encounter'");
 						$rowMoneyAdjusted = sqlFetchArray($resMoneyAdjusted);
 						$MoneyAdjusted=$rowMoneyAdjusted['MoneyAdjusted'];
 
@@ -255,8 +256,8 @@ if (isset($_POST["mode"]))
 				<td class="<?php echo $StringClass; ?>" ><?php echo htmlspecialchars($ServiceDate); ?></td>
 				<td align="right" class="<?php echo $StringClass; ?>" ><input name="HiddenEncounter<?php echo $CountIndex; ?>" value="<?php echo htmlspecialchars($Encounter); ?>" 
 				type="hidden"/><?php echo htmlspecialchars($Encounter); ?></td>
-				<td class="<?php echo $StringClass; ?>" ><input name="HiddenCode<?php echo $CountIndex; ?>" value="<?php echo htmlspecialchars($Code); ?>"
-				 type="hidden"/><?php echo htmlspecialchars($Code.$ModifierString); ?><input name="HiddenModifier<?php echo $CountIndex; ?>" value="<?php echo htmlspecialchars($Modifier); ?>"
+				<td class="<?php echo $StringClass; ?>" ><input name="HiddenCodetype<?php echo $CountIndex; ?>" value="<?php echo htmlspecialchars($Codetype); ?>" type="hidden"/><input name="HiddenCode<?php echo $CountIndex; ?>" value="<?php echo htmlspecialchars($Code); ?>"
+				 type="hidden"/><?php echo htmlspecialchars($Codetype."-".$Code.$ModifierString); ?><input name="HiddenModifier<?php echo $CountIndex; ?>" value="<?php echo htmlspecialchars($Modifier); ?>"
 				  type="hidden"/></td>
 				<td align="right" class="<?php echo $StringClass; ?>" ><input name="HiddenChargeAmount<?php echo $CountIndex; ?>"
 				 id="HiddenChargeAmount<?php echo $CountIndex; ?>"  value="<?php echo htmlspecialchars($Fee); ?>" type="hidden"/><?php echo htmlspecialchars($Fee); ?></td>
@@ -291,7 +292,7 @@ if (isset($_POST["mode"]))
 				 name="FollowUpReason<?php echo $CountIndex; ?>"  readonly=""  type="text"   style="width:209px;font-size:12px" /></td>
 			  </tr>
 			<?php
-					
+
 				 }while($RowSearch = sqlFetchArray($ResultSearchNew));
 			?>
 			 <tr class="text">

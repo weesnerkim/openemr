@@ -16,6 +16,10 @@ require_once("$srcdir/gprelations.inc.php");
 if ($_GET['file']) {
   $mode = 'fax';
   $filename = $_GET['file'];
+
+  // ensure the file variable has no illegal characters
+  check_file_dir_name($filename);
+
   $filepath = $GLOBALS['hylafax_basedir'] . '/recvq/' . $filename;
 }
 else if ($_GET['scan']) {
@@ -34,7 +38,7 @@ $faxcache = $GLOBALS['OE_SITE_DIR'] . "/faxcache/$mode/$filebase";
 $info_msg = "";
 
 // This function builds an array of document categories recursively.
-// Kittens are the children of cats, you know.  :-)
+// Kittens are the children of cats, you know.  :-)getKittens
 //
 function getKittens($catid, $catstring, &$categories) {
   $cres = sqlStatement("SELECT id, name FROM categories " .
@@ -87,7 +91,7 @@ if ($_POST['form_save']) {
     //
     if ($_POST['form_cb_copy_type'] == 1) {
       // Compute a target filename that does not yet exist.
-      $ffname = trim($_POST['form_filename']);
+      $ffname = check_file_dir_name(trim($_POST['form_filename']));
       $i = strrpos($ffname, '.');
       if ($i) $ffname = trim(substr($ffname, 0, $i));
       if (!$ffname) $ffname = $filebase;
@@ -145,7 +149,7 @@ if ($_POST['form_save']) {
         }
         $note = "New scanned document $newid: $note";
         $form_note_message = trim($_POST['form_note_message']);
-        if (get_magic_quotes_gpc()) $form_note_message = stripslashes($form_note_message);
+        $form_note_message = strip_escape_custom($form_note_message);
         if ($form_note_message) $note .= "\n" . $form_note_message;
         // addPnote() will do its own addslashes().
         $noteid = addPnote($_POST['form_pid'], $note, $userauthorized, '1',
@@ -187,10 +191,8 @@ if ($_POST['form_save']) {
         //
         $imagedir = $GLOBALS['OE_SITE_DIR'] . "/documents/$patient_id/encounters";
         $imagepath = "$imagedir/${encounter_id}_$formid.jpg";
-        echo $imagedir;
-		die;
         if (! is_dir($imagedir)) {
-		  $tmp0 = exec('mkdir -p "'.$imagedir.'"', $tmp1, $tmp2);
+          $tmp0 = exec('mkdir -p "' . $imagedir . '"', $tmp1, $tmp2);
           if ($tmp2) die("mkdir returned $tmp2: $tmp0");
           exec("touch '$imagedir/index.html'");
         }
@@ -206,7 +208,7 @@ if ($_POST['form_save']) {
       if ($_POST['form_cb_note'] && !$info_msg) {
         $note = "New scanned encounter note for visit on " . substr($erow['date'], 0, 10);
         $form_note_message = trim($_POST['form_note_message']);
-        if (get_magic_quotes_gpc()) $form_note_message = stripslashes($form_note_message);
+        $form_note_message = strip_escape_custom($form_note_message);
         if ($form_note_message) $note .= "\n" . $form_note_message;
         // addPnote() will do its own addslashes().
         addPnote($patient_id, $note, $userauthorized, '1',
@@ -225,11 +227,9 @@ if ($_POST['form_save']) {
     $form_message  = trim($_POST['form_message']);
     $form_finemode = $_POST['form_finemode'] ? '-m' : '-l';
 
-    if (get_magic_quotes_gpc()) {
-      $form_from    = stripslashes($form_from);
-      $form_to      = stripslashes($form_to);
-      $form_message = stripslashes($form_message);
-    }
+    $form_from    = strip_escape_custom($form_from);
+    $form_to      = strip_escape_custom($form_to);
+    $form_message = strip_escape_custom($form_message);
 
     // Generate a cover page using enscript.  This can be a cool thing
     // to do, as enscript is very powerful.
@@ -334,10 +334,8 @@ $using_scanned_notes = $tmp['count'];
 // If the image cache does not yet exist for this fax, build it.
 // This will contain a .tif image as well as a .jpg image for each page.
 //
-echo $faxcache;
-
 if (! is_dir($faxcache)) {
-  $tmp0 = exec('mkdir -p "'.$faxcache.'"', $tmp1, $tmp2);
+  $tmp0 = exec('mkdir -p "' . $faxcache . '"', $tmp1, $tmp2);
   if ($tmp2) die("mkdir returned $tmp2: $tmp0");
   if (strtolower($ext) != '.tif') {
     // convert's default density for PDF-to-TIFF conversion is 72 dpi which is
@@ -393,12 +391,12 @@ div.section {
 <style type="text/css">@import url(../../library/dynarch_calendar.css);</style>
 
 <script type="text/javascript" src="../../library/topdialog.js"></script>
-<script type="text/javascript" src="../../library/dialog.js"></script>
+<script type="text/javascript" src="../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 <script type="text/javascript" src="../../library/textformat.js"></script>
 <script type="text/javascript" src="../../library/dynarch_calendar.js"></script>
 <?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
 <script type="text/javascript" src="../../library/dynarch_calendar_setup.js"></script>
-<script type="text/javascript" src="../../library/js/jquery-1.2.2.min.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
 
 <script language="JavaScript">
 

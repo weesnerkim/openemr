@@ -26,13 +26,7 @@
 //
 // +------------------------------------------------------------------------------+
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 if (!extension_loaded('soap')) {
    die("PLEASE ENABLE SOAP EXTENSION");
 }
@@ -67,31 +61,27 @@ require_once("../interface/globals.php");
      break;
    }
  }
+ $pass = sha1($GLOBALS['portal_offsite_password'].gmdate('Y-m-d H').$randkey);
 ?>
 <html>
 <head>
-    <?php include_once($GLOBALS['fileroot']."/library/sha1.js");?>
 <script type="text/javascript">
  function getshansubmit(){
-   	randkey = "<?php echo $randkey;?>";
-	pass = SHA1(document.portal.pass.value+"<?php echo gmdate('Y-m-d H');?>"+randkey);
-	document.portal.pwd.value=pass;
-	document.portal.randkey.value=randkey;
 	document.forms[0].submit();
  }
  
 </script>
 </head>
-<title><?php echo htmlspecialchars(xl("Redirection"),ENT_QUOTES);?></title>
+<title><?php echo xlt('Redirection');?></title>
 <body onload="getshansubmit()">
-    <form name="portal" method="post" action="<?php echo htmlspecialchars($GLOBALS['portal_offsite_address'],ENT_QUOTES);?>">
+    <form name="portal" method="post" action="<?php echo htmlspecialchars($GLOBALS['portal_offsite_address']."?version=".$v_offsite_portal,ENT_QUOTES);?>">
     <input type="hidden" name="user" value="<?php echo htmlspecialchars($GLOBALS['portal_offsite_username'],ENT_QUOTES);?>">
     <input type="hidden" name="emr_path" value="<?php echo htmlspecialchars($emr_path,ENT_QUOTES);?>">
     <input type="hidden" name="emr_site" value="<?php echo htmlspecialchars($_SESSION['site_id'],ENT_QUOTES);?>">
     <input type="hidden" name="uname" value="<?php echo htmlspecialchars($row['fname']." ".$row['lname'],ENT_QUOTES);?>">
     <input type="hidden" name="pass" value="<?php echo htmlspecialchars($GLOBALS['portal_offsite_password'],ENT_QUOTES);?>">
-	<input type="hidden" name="randkey" value="">
-	<input type="hidden" name="pwd" value="">
+    <input type="hidden" name="randkey" value="<?php echo htmlspecialchars($randkey,ENT_QUOTES);?>">
+	  <input type="hidden" name="pwd" value="<?php echo htmlspecialchars($pass,ENT_QUOTES);?>">
     </form>
 </body>
 </html>

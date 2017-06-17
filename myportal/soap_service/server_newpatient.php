@@ -25,20 +25,14 @@
 //
 // +------------------------------------------------------------------------------+
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 
 class newpatient{
 	
 //this will return the query string along with the parameter array, according to the case case.
 //actual execution is done in the select_query function in Server_side
-	
+
 	
     public function query_formation($data){
         global $pid;
@@ -84,7 +78,7 @@ class newpatient{
             $query=" select insd.*, ic.name as provider_name from insurance_data as insd " .
                 "left join insurance_companies as ic on ic.id = insd.provider " .
                 "where pid = ? and type =? order by date DESC limit 1 ";
-            array_push($data[1],$pid);
+            array_unshift($data[1],$pid);
             return array($query,$data[1]);
             break;
 	    // Entries pending  for approval demo and documents.
@@ -94,7 +88,7 @@ class newpatient{
             return array($query,array($pid));
             break;
             // Demo building from layout options.
-            case 'P7': 
+            case 'P7':
             
             $query=" select * from layout_options WHERE form_id = 'DEM' AND uor > 0 AND field_id != '' " .
                 " ORDER BY group_name, seq";
@@ -112,24 +106,24 @@ class newpatient{
             return array($query);
             break;
             //getting the password
-            case 'P18':	
+            case 'P18':
             $query = "select  portal_username from patient_access_offsite where portal_username =? ";
             return array($query,$data[1]);
             break;
 			
-            case 'P20':	
+            case 'P20':
             $x=array($data[1][0]);
             $query="select count(*) AS count from patient_data where pubpid = ?";
             return array($query,$x);
             break;
 	    //getting DOB and SSN for verifying the duplicate patient existance
-            case 'P21':	
+            case 'P21':
             $x=array($data[1][0]);
             $query="select  ss,DOB  from patient_data where DOB=?";
             return array($query,$x);
             break;
 	    //master data for calendar from Globals
-            case 'B1':    
+            case 'B1':
             
             if($data[1][0]=='calendar_interval'||$data[1][0]=='schedule_start'||$data[1][0]=='schedule_end')
             {
@@ -213,7 +207,7 @@ class newpatient{
                         
             case 'G2':
             $query = "SELECT * FROM documents_legal_master AS dlm WHERE dlm_subcategory <> ? and dlm_effective_date <= now() AND
-            dlm_effective_date<>? AND dlm_document_id Not IN (SELECT distinct(dld_master_docid) FROM documents_legal_detail WHERE
+            dlm_effective_date<>? AND dlm_upload_type = '0' AND dlm_document_id Not IN (SELECT distinct(dld_master_docid) FROM documents_legal_detail WHERE
             dld_id IS NOT NULL AND dld_pid=?)";
             array_push($data[1],$pid);
             return array($query,$data[1]);
@@ -241,6 +235,14 @@ class newpatient{
             JOIN form_encounter as fe ON encounter=dld_encounter WHERE dlm_subcategory = ? and dlm_effective_date <= now() AND
             dlm_effective_date<>? AND dld_id IS NOT NULL AND dld_filename != '' AND dld_pid=? GROUP BY dld_encounter,dlm_document_id
             ORDER BY dld_id DESC";
+            array_push($data[1],$pid);
+            return array($query,$data[1]);
+            break;
+
+            case 'G6':
+            $query = "SELECT * FROM documents_legal_master AS dlm LEFT OUTER JOIN documents_legal_detail as dld ON
+            dlm_document_id=dld_master_docid WHERE dlm_subcategory <> ? and dlm_effective_date <= now() AND dlm_effective_date<>?
+            AND dld_id IS NOT NULL AND (dld_signed = ? OR dlm_upload_type = '1') AND dld_pid=? ORDER BY dlm_effective_date DESC";
             array_push($data[1],$pid);
             return array($query,$data[1]);
             break;

@@ -21,7 +21,6 @@ require_once("$srcdir/lists.inc");
 require_once("$srcdir/patient.inc");
 require_once("$srcdir/acl.inc");
 require_once("$srcdir/options.inc.php");
-require_once("$srcdir/translation.inc.php");
 ?>
 <html>
 <head>
@@ -31,7 +30,7 @@ require_once("$srcdir/translation.inc.php");
 	href='<?php echo $GLOBALS['webroot'] ?>/library/dynarch_calendar.css'
 	type='text/css'>
 
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 
 <style type="text/css">
 .style1 {
@@ -41,9 +40,9 @@ require_once("$srcdir/translation.inc.php");
 <script language="JavaScript">
 function form_validate()
 {
- 
+
  if(document.forms[0].re_id_code.value == "undefined" || document.forms[0].re_id_code.value == "")
- { 
+ {
   alert("<?php echo xl('Enter the Re Identification code');?>");
   return false;
  }
@@ -64,13 +63,13 @@ function download_file()
 <div id="overDiv"
 	style="position: absolute; visibility: hidden; z-index: 1000;"></div>
 <form name="re_identification" enctype="Re_identification_ip_single_code"
-	action="re_identification_op_single_patient.php" method="POST" onsubmit="return form_validate();"><?php 
+	action="re_identification_op_single_patient.php" method="POST" onsubmit="return form_validate();"><?php
  $row = sqlQuery("SHOW TABLES LIKE 'de_identification_status'");
  if (empty($row))
  {
   ?>
    <table>  <tr> 	<td>&nbsp;</td> <td>&nbsp;</td> </tr>
-	      <tr>  <td>&nbsp;</td> <td>&nbsp;</td> </tr> 
+	      <tr>  <td>&nbsp;</td> <td>&nbsp;</td> </tr>
  </table>
  <table class="de_identification_status_message" align="center" >
 	<tr valign="top">
@@ -79,11 +78,11 @@ function download_file()
 		<br>
         <?php echo xl('Please upgrade OpenEMR Database to include De Identification procedures, function, tables'); ?>
 	</br></br><a  target="Blank" href="../../contrib/util/de_identification_upgrade.php"><?php echo xl('Click here');?></a>
-	<?php echo xl('to run'); 
+	<?php echo xl('to run');
     	echo " de_identification_upgrade.php</br>";?><br>
 		</td>
 		<td>&nbsp;</td>
-	</tr>    
+	</tr>
 	<tr>
 		<td>&nbsp;</td>
 		<td>&nbsp;</td>
@@ -93,7 +92,7 @@ function download_file()
 		<td>&nbsp;</td>
 	</tr>
 	</table>
-  <?php  
+  <?php
   }
  else {
 	$query = "select status from re_identification_status";
@@ -105,7 +104,7 @@ function download_file()
 	*  0 - There is no Re Identification in progress. (start new Re Identification process)
 	*  1 - A Re Identification process is currently in progress.
 	*  2 - The Re Identification process completed and xls file is ready to download
-	*/  
+	*/
 
 	}
 	if($reIdentificationStatus == 1)
@@ -257,7 +256,7 @@ function download_file()
 		}
 	}
       }
-    
+
 	?>
 </form>
 </body>

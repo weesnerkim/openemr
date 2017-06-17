@@ -1,5 +1,5 @@
 <?php
- // Copyright (C) 2011 Ensoftek 
+ // Copyright (C) 2011 Ensoftek
  //
  // This program is free software; you can redistribute it and/or
  // modify it under the terms of the GNU General Public License
@@ -8,29 +8,40 @@
 
  // This program exports report to PQRI 2009 XML format.
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
+
 
 
 require_once("../interface/globals.php");
 require_once("../library/patient.inc");
 require_once "../library/options.inc.php";
 require_once("../library/clinical_rules.php");
-require_once("../library/classes/PQRIXml.class.php");
+
+//To improve performance and not freeze the session when running this
+// report, turn off session writing. Note that php session variables
+// can not be modified after the line below. So, if need to do any php
+// session work in the future, then will need to remove this line.
+session_write_close();
+
+//Remove time limit, since script can take many minutes
+set_time_limit(0);
+
+// Set the "nice" level of the process for these reports. When the "nice" level
+// is increased, these cpu intensive reports will have less affect on the performance
+// of other server activities, albeit it may negatively impact the performance
+// of this report (note this is only applicable for linux).
+if (!empty($GLOBALS['cdr_report_nice'])) {
+  proc_nice($GLOBALS['cdr_report_nice']);
+}
 
 function getLabelNumber($label) {
-	
+
 	if ( strlen($label) == 0) {
 		return "1";
 	}
 
 	$tokens = explode(" ", $label);
-	
+
 	$num_tokens = sizeof($tokens);
 	if ( $tokens[$num_tokens-1] != null ) {
 		if ( is_numeric($tokens[$num_tokens-1])) {
@@ -39,7 +50,7 @@ function getLabelNumber($label) {
 	}
 
 	return "1";
-	
+
 }
 
 function getMeasureNumber($row) {
@@ -51,7 +62,7 @@ function getMeasureNumber($row) {
          	return $row['cqm_nqf_code'];
          }
        }
-       else 
+       else
        {
        	 return "";
        }
@@ -72,7 +83,7 @@ $xml->add_file_audit_data();
 // Add the registry entries
 if ( $nested == 'false') {
 	$xml->add_registry('A');
-}	
+}
 else {
 	$xml->add_registry('E');
 }
@@ -80,10 +91,12 @@ else {
 
 // Add the measure groups.
 if ( $nested == 'false' ) {
-	$dataSheet = test_rules_clinic('collate_outer','cqm',$target_date,'report','','','');
+        // Collect results (note using the batch method to decrease memory overhead and improve performance)
+	$dataSheet = test_rules_clinic_batch_method('collate_outer','cqm_2011',$target_date,'report','','');
 }
 else {
-	$dataSheet = test_rules_clinic('collate_inner','cqm',$target_date,'report','','cqm','plans');
+        // Collect results (note using the batch method to decrease memory overhead and improve performance)
+	$dataSheet = test_rules_clinic_batch_method('collate_inner','cqm_2011',$target_date,'report','cqm','plans');
 }
 
 $firstProviderFlag = TRUE;
@@ -111,10 +124,10 @@ foreach ($dataSheet as $row) {
 			$pqri_measures['performance-rate'] = $row['percentage'];
 	        $pqri_measures['reporting-rate'] = (($row['pass_filter']-$row['excluded'])/$row['pass_filter'])*100;
                 $pqri_measures['reporting-rate']=$pqri_measures['reporting-rate'].'%';
-	        $xml->add_pqri_measures($pqri_measures);	
+	        $xml->add_pqri_measures($pqri_measures);
 		}
 		else { // $row[0] == "sub"
-				
+
 		}
  	}
     else if (isset($row['is_provider'])) {
@@ -131,15 +144,15 @@ foreach ($dataSheet as $row) {
 	           $physician_ids['tin'] = $row['federaltaxid'];
 	       }
 	     }
-	     $physician_ids['encounter-from-date'] = '01-01-' . date('Y', strtotime($target_date )); 
+	     $physician_ids['encounter-from-date'] = '01-01-' . date('Y', strtotime($target_date ));
 	     $physician_ids['encounter-to-date'] = '12-31-' . date('Y', strtotime($target_date ));
-	     
+
        	 $xml->open_provider($physician_ids);
 	     $firstProviderFlag = FALSE;
 	     $existProvider = TRUE;
    }
    else { // isset($row['is_plan'])
-   	
+
    	    if ( $firstPlanFlag == FALSE ) {
    	    	if ( $firstProviderFlag == FALSE ) {
 		    	$xml->close_provider();
@@ -148,14 +161,14 @@ foreach ($dataSheet as $row) {
     	 		$xml->close_measure_group();
     	 	}
     	}
-   	
+
     	 if ( $nested == 'true' ){
     	 	$xml->open_measure_group($row['cqm_measure_group']);
     	 }
 	     $firstPlanFlag = FALSE;
        	 $firstProviderFlag = TRUE; // Reset the provider flag
    }
- 	 	
+
 }
 
 if ( $existProvider == TRUE ){
@@ -164,12 +177,13 @@ if ( $existProvider == TRUE ){
 }
 
 $xml->close_submission();
- 
+
 ?>
 
 <html>
 <head>
 <?php html_header_show();?>
+<script type="text/javascript" src="<?php echo $webroot ?>/interface/main/tabs/js/include_opener.js"></script>
 <link rel=stylesheet href="<?php echo $css_header;?>" type="text/css">
 <title><?php echo htmlspecialchars( xl('Export PQRI Report'), ENT_NOQUOTES); ?></title>
 </head>

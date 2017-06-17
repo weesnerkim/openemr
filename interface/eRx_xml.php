@@ -1,60 +1,46 @@
 <?php
-// +-----------------------------------------------------------------------------+
-// Copyright (C) 2011 ZMG LLC <sam@zhservices.com>
-//
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-//
-// A copy of the GNU General Public License is included along with this program:
-// openemr/interface/login/GnuGPL.html
-// For more information write to the Free Software
-// Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
-//
-// Author:   Eldho Chacko <eldho@zhservices.com>
-//           Vinish K <vinish@zhservices.com>
-//
-// +------------------------------------------------------------------------------+
+
+/**
+ * interface/eRx_xml.php Functions for interacting with NewCrop communications.
+ *
+ * Copyright (C) 2011 ZMG LLC <sam@zhservices.com>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by the Free
+ * Software Foundation; either version 3 of the License, or (at your option) any
+ * later version.  This program is distributed in the hope that it will be
+ * useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+ * Public License for more details.  You should have received a copy of the GNU
+ * General Public License along with this program.
+ * If not, see <http://opensource.org/licenses/gpl-license.php>.
+ *
+ * @package    OpenEMR
+ * @subpackage NewCrop
+ * @author     Eldho Chacko <eldho@zhservices.com>
+ * @author     Vinish K <vinish@zhservices.com>
+ * @link       http://www.open-emr.org
+ */
+
+$facilityService = new \services\FacilityService();
+
 function getErxPath()
 {
-    //if($GLOBALS['erx_source']==1)
-    //return $GLOBALS['erx_path'];
-    //else if($GLOBALS['erx_source']==2)
-    return $GLOBALS['erx_path_production'];
+    return $GLOBALS['erx_newcrop_path'];
 }
 
 function getErxSoapPath()
 {
-    //if($GLOBALS['erx_source']==1)
-    //return $GLOBALS['erx_path_soap'];
-    //else if($GLOBALS['erx_source']==2)
-    return $GLOBALS['erx_path_soap_production'];
+    return $GLOBALS['erx_newcrop_path_soap'];
 }
 
 function getErxCredentials()
 {
     $cred=array();
-    //if($GLOBALS['erx_source']==1)
-    //{
-    //    $cred[]=$GLOBALS['partner_name'];
-    //    $cred[]=$GLOBALS['erx_name'];
-    //    $cred[]=$GLOBALS['erx_password'];
-    //}
-    //else if($GLOBALS['erx_source']==2)
-    //{
-        $cred[]=$GLOBALS['partner_name_production'];
-        $cred[]=$GLOBALS['erx_name_production'];
-        $cred[]=$GLOBALS['erx_password_production'];
-    //}
+    $cred[]=$GLOBALS['erx_account_partner_name'];
+    $cred[]=$GLOBALS['erx_account_name'];
+    $cred[]=$GLOBALS['erx_account_password'];
+
     return $cred;
 }
 
@@ -90,7 +76,7 @@ function trimData($str,$length)
 }
 
 function stringToNumeric($str)
-{	
+{
 	if(is_numeric($str)){
     return array($str,"");
     }
@@ -102,7 +88,7 @@ function stringToNumeric($str)
         }
         else{
         $txt.=$x;
-        
+
         }
     }
     return array($num,$txt);
@@ -188,7 +174,7 @@ function destination($doc,$r,$page='',$pid)
         if($userRole['newcrop_user_role']=='admin')
         $page='admin';
         elseif($userRole['newcrop_user_role']=='manager')
-        $page='manager';        
+        $page='manager';
     }
     $b = $doc->createElement( "Destination" );
     $requestedPage = $doc->createElement( "requestedPage" );
@@ -201,19 +187,21 @@ function destination($doc,$r,$page='',$pid)
 
 function account($doc,$r)
 {
-    global $msg;
-    $erxSiteID=sqlQuery("SELECT federal_ein FROM facility WHERE primary_business_entity='1'");
+    global $msg, $facilityService;
+    $erxSiteID= $facilityService->getPrimaryBusinessEntity();
     if(!$erxSiteID['federal_ein'])
-    {echo htmlspecialchars( xl("Please select a Primary Business Entity facility with 'Tax ID' as your facility Tax ID. If you are an individual practitioner, use your tax id. This is used for identifying you in the NewCrop system."), ENT_NOQUOTES);die;}
-    $userRole=sqlQuery("SELECT * FROM users AS u LEFT JOIN facility AS f ON f.id=u.facility_id WHERE u.username=?",array($_SESSION['authUser']));
+    {
+	echo htmlspecialchars( xl("Please select a Primary Business Entity facility with 'Tax ID' as your facility Tax ID. If you are an individual practitioner, use your tax id. This is used for identifying you in the NewCrop system."), ENT_NOQUOTES);
+	die;
+    }
     $b = $doc->createElement( "Account" );
-    $b->setAttribute('ID','1');
-    $userRole['name']=stripSpecialCharacterFacility($userRole['name']);
-    $userRole['name']=trimData($userRole['name'],35);
-    $msg = validation(xl('Account Name'),$userRole['name'],$msg);
+    $b->setAttribute('ID', $GLOBALS['erx_account_id']);
+    $erxSiteID['name']=stripSpecialCharacterFacility($erxSiteID['name']);
+    $erxSiteID['name']=trimData($erxSiteID['name'],35);
+    $msg = validation(xl('Account Name'),$erxSiteID['name'],$msg);
     $accountName = $doc->createElement( "accountName" );
     $accountName->appendChild(
-        $doc->createTextNode( $userRole['name'] )
+        $doc->createTextNode( $erxSiteID['name'] )
     );
     $b->appendChild( $accountName );
     $msg = validation(xl('Site ID'),$_SESSION['site_id'],$msg);
@@ -222,53 +210,68 @@ function account($doc,$r)
         $doc->createTextNode( $erxSiteID['federal_ein'] )
     );
     $b->appendChild( $siteID );
-    $userRole['street']=stripSpecialCharacterFacility($userRole['street']);
-    $userRole['street']=trimData($userRole['street'],35);
+    $erxSiteID['street']=stripSpecialCharacterFacility($erxSiteID['street']);
+    $erxSiteID['street']=trimData($erxSiteID['street'],35);
     $AccountAddress = $doc->createElement( "AccountAddress" );
-        $msg = validation(xl('Facility Street'),$userRole['street'],$msg);
+        $msg = validation(xl('Facility Street'),$erxSiteID['street'],$msg);
         $address1 = $doc->createElement( "address1" );
         $address1->appendChild(
-            $doc->createTextNode( $userRole['street'] )
+            $doc->createTextNode( $erxSiteID['street'] )
         );
         $AccountAddress->appendChild( $address1 );
-        $msg = validation(xl('Facility City'),$userRole['city'],$msg);
+        $msg = validation(xl('Facility City'),$erxSiteID['city'],$msg);
         $city = $doc->createElement( "city" );
         $city->appendChild(
-            $doc->createTextNode( $userRole['city'] )
+            $doc->createTextNode( $erxSiteID['city'] )
         );
         $AccountAddress->appendChild( $city );
-        $msg = validation(xl('Facility State'),$userRole['state'],$msg);
+        $msg = validation(xl('Facility State'),$erxSiteID['state'],$msg);
         $state = $doc->createElement( "state" );
         $state->appendChild(
-            $doc->createTextNode( $userRole['state'] )
+            $doc->createTextNode( $erxSiteID['state'] )
         );
         $AccountAddress->appendChild( $state );
-        $msg = validation(xl('Facility Zip'),$userRole['postal_code'],$msg);
+        $jasonbigzip=$erxSiteID['postal_code'];
+	$jasonbigzip=preg_replace('/[^0-9]/','',$jasonbigzip);
+	if(strlen($jasonbigzip) >=5){
+	    $jasonzip=substr($jasonbigzip,0,5);
+	    $zip4=substr($jasonbigzip,5,4);
+	}
+	else{
+	    $msg = validation(xl('Facility Zip'),$jasonzip,$msg);
+	}
         $zip = $doc->createElement( "zip" );
         $zip->appendChild(
-            $doc->createTextNode( $userRole['postal_code'] )
+            $doc->createTextNode( $jasonzip )
         );
         $AccountAddress->appendChild( $zip );
-        $msg = validation(xl('Facility Country code'),$userRole['country_code'],$msg);
-        $county_code = substr($userRole['country_code'],0,2);
+	if(strlen($zip4)==4){
+	    $zipFour = $doc->createElement( "zip4" );
+	    $zipFour->appendChild(
+		$doc->createTextNode( $zip4 )
+	    );
+	    $AccountAddress->appendChild( $zipFour );
+	}
+        $msg = validation(xl('Facility Country code'),$erxSiteID['country_code'],$msg);
+        $county_code = substr($erxSiteID['country_code'],0,2);
         $country = $doc->createElement( "country" );
         $country->appendChild(
             $doc->createTextNode( $county_code )
-        );    
+        );
         $AccountAddress->appendChild( $country );
     $b->appendChild( $AccountAddress );
-    $msg = validation(xl('Facility Phone'),$userRole['phone'],$msg);
+    $msg = validation(xl('Facility Phone'),$erxSiteID['phone'],$msg);
     $accountPrimaryPhoneNumber = $doc->createElement( "accountPrimaryPhoneNumber" );
-    $userRole['phone'] = stripPhoneSlashes($userRole['phone']);
-    $accountPrimaryPhoneNumber->appendChild(        
-        $doc->createTextNode( $userRole['phone'] )
+    $erxSiteID['phone'] = stripPhoneSlashes($erxSiteID['phone']);
+    $accountPrimaryPhoneNumber->appendChild(
+        $doc->createTextNode( $erxSiteID['phone'] )
     );
     $b->appendChild( $accountPrimaryPhoneNumber );
-    $msg = validation(xl('Facility Fax'),$userRole['fax'],$msg);
+    $msg = validation(xl('Facility Fax'),$erxSiteID['fax'],$msg);
     $accountPrimaryFaxNumber = $doc->createElement( "accountPrimaryFaxNumber" );
-    $userRole['fax'] = stripPhoneSlashes($userRole['fax']);
+    $erxSiteID['fax'] = stripPhoneSlashes($erxSiteID['fax']);
     $accountPrimaryFaxNumber->appendChild(
-        $doc->createTextNode( $userRole['fax'] )
+        $doc->createTextNode( $erxSiteID['fax'] )
     );
     $b->appendChild( $accountPrimaryFaxNumber );
     $r->appendChild( $b );
@@ -311,13 +314,27 @@ function location($doc,$r)
         );
         $LocationAddress->appendChild($state);
         }
-        if($userRole['postal_code']){
-        $zip = $doc->createElement( 'zip' );
+	$jasonbigzip=$userRole['postal_code'];
+	$jasonbigzip=preg_replace('/[^0-9]/','',$jasonbigzip);
+	if(strlen($jasonbigzip) >=5){
+	    $jasonzip=substr($jasonbigzip,0,5);
+	    $zip4=substr($jasonbigzip,5,4);
+	}
+	else{
+	    $msg = validation(xl('Facility Zip'),$jasonzip,$msg);
+	}
+        $zip = $doc->createElement( "zip" );
         $zip->appendChild(
-            $doc->createTextNode( $userRole['postal_code'] )
+            $doc->createTextNode( $jasonzip )
         );
-        $LocationAddress->appendChild($zip);
-        }
+        $LocationAddress->appendChild( $zip );
+	if(strlen($zip4)==4){
+	    $zipFour = $doc->createElement( "zip4" );
+	    $zipFour->appendChild(
+		$doc->createTextNode( $zip4 )
+	    );
+	    $LocationAddress->appendChild( $zipFour );
+	}
         if($userRole['country_code']){
         $county_code = substr($userRole['country_code'],0,2);
         $country = $doc->createElement( 'country' );
@@ -559,7 +576,7 @@ function Patient($doc,$r,$pid)
     $b = $doc->createElement( "Patient" );
     $b->setAttribute('ID',$patient_data['pid']);
     $PatientName = $doc->createElement( "PatientName" );
-        $patient_data['lname']=stripSpecialCharacter($patient_data['lname']);    
+        $patient_data['lname']=stripSpecialCharacter($patient_data['lname']);
         $patient_data['lname']=trimData($patient_data['lname'],35);
         //$msg = validation(xl('Patient Last name'),$patient_data['lname'],$msg);
         if($patient_data['lname']=='')
@@ -645,7 +662,7 @@ function Patient($doc,$r,$pid)
     $PatientCharacteristics = $doc->createElement( "PatientCharacteristics" );
         if(trim($patient_data['date_of_birth'])=='' || $patient_data['date_of_birth']=='00000000')
             $warning_msg .= "<br>".htmlspecialchars( xl("Patient Date Of Birth is missing"), ENT_NOQUOTES);
-        if($patient_data['date_of_birth'] && $patient_data['date_of_birth']!='00000000'){        
+        if($patient_data['date_of_birth'] && $patient_data['date_of_birth']!='00000000'){
         $dob = $doc->createElement( "dob" );
         $dob->appendChild(
             $doc->createTextNode( $patient_data['date_of_birth'] )
@@ -664,7 +681,7 @@ function Patient($doc,$r,$pid)
         }
     $b->appendChild( $PatientCharacteristics );
     PatientFreeformHealthplans($doc,$b,$pid);
-    $allergyId=PatientFreeformAllergy($doc,$b,$pid);    
+    $allergyId=PatientFreeformAllergy($doc,$b,$pid);
     $r->appendChild( $b );
 	return $allergyId;
 }
@@ -674,14 +691,15 @@ function OutsidePrescription($doc,$r,$pid,$prescid)
     global $msg;
     if($prescid)
     {
-        $prec=sqlQuery("SELECT p.note,p.dosage,p.substitute,p.per_refill,p.form,p.route,p.interval,p.drug,l1.title AS title1,l2.title AS title2,l3.title AS title3,p.id AS prescid,
-            DATE_FORMAT(date_added,'%Y%m%d') AS date_added,CONCAT(fname,' ',mname,' ',lname) AS docname,p.quantity
+        $prec=sqlQuery("SELECT p.note,p.dosage,p.substitute,p.per_refill,p.form,p.route,p.size,p.interval,p.drug,l1.title AS title1,l2.title AS title2,l3.title AS title3,l4.title AS title4,p.id AS prescid,
+            DATE_FORMAT(date_added,'%Y%m%d') AS date_added,CONCAT_WS(fname,' ',mname,' ',lname) AS docname,p.quantity
             FROM prescriptions AS p
             LEFT JOIN users AS u ON p.provider_id=u.id
-            LEFT JOIN list_options AS l1 ON l1.list_id='drug_form' AND l1.option_id=p.form
-            LEFT JOIN list_options AS l2 ON l2.list_id='drug_route' AND l2.option_id=p.route
-            LEFT JOIN list_options AS l3 ON l3.list_id='drug_interval' AND l3.option_id=p.interval
-            WHERE p.drug<>'' and p.id=?",array($prescid));
+            LEFT JOIN list_options AS l1 ON l1.list_id = 'drug_form'     AND l1.option_id = p.form     AND l1.activity = 1
+            LEFT JOIN list_options AS l2 ON l2.list_id = 'drug_route'    AND l2.option_id = p.route    AND l2.activity = 1
+            LEFT JOIN list_options AS l3 ON l3.list_id = 'drug_interval' AND l3.option_id = p.interval AND l3.activity = 1
+            LEFT JOIN list_options AS l4 ON l4.list_id = 'drug_units'    AND l4.option_id = p.unit     AND l4.activity = 1
+            WHERE p.drug <> '' and p.id = ?",array($prescid));
         $b = $doc->createElement( "OutsidePrescription" );
             $externalId = $doc->createElement( "externalId" );
             $externalId->appendChild(
@@ -710,7 +728,7 @@ function OutsidePrescription($doc,$r,$pid,$prescid)
                 $doc->createTextNode( $x[0] )
             );
             $b->appendChild( $dispenseNumber );
-            $s=trimData($x[1]."  Take ".$prec['dosage']." In ".$prec['title1']." ".$prec['title2']." ".$prec['title3'],140);
+            $s=trimData($x[1].$prec['size']." ".$prec['title4']." ".$prec['dosage']." In ".$prec['title1']." ".$prec['title2']." ".$prec['title3'],140);
             $s=stripSpecialCharacter($s);
             $sig = $doc->createElement( "sig" );
             $sig->appendChild(
@@ -718,7 +736,7 @@ function OutsidePrescription($doc,$r,$pid,$prescid)
             );
             $b->appendChild( $sig );
             $refillCount = $doc->createElement( "refillCount" );
-            $x=stringToNumeric($prec['per_refill']); 
+            $x=stringToNumeric($prec['per_refill']);
             $refillCount->appendChild(
                 $doc->createTextNode( $x[0])
             );
@@ -738,11 +756,11 @@ function PatientMedication($doc,$r,$pid,$med_limit)
     $active='';
     if($GLOBALS['erx_upload_active']==1)
         $active = " and (enddate is null or enddate = '' or enddate = '0000-00-00' )";
-    $res_med=sqlStatement("select * from lists where type='medication' and pid=? and title<>'' 
+    $res_med=sqlStatement("select * from lists where type='medication' and pid=? and title<>''
 	and erx_uploaded='0' $active order by enddate limit 0,$med_limit",array($pid));
 	$uploaded_med_arr="";
     while($row_med=sqlFetchArray($res_med))
-    {	
+    {
 		$uploaded_med_arr[]=$row_med['id'];
         $b = $doc->createElement( "OutsidePrescription" );
             $externalId = $doc->createElement( "externalId" );
@@ -787,7 +805,7 @@ function PatientMedication($doc,$r,$pid,$med_limit)
             );
             $b->appendChild( $prescriptionType );
         $r->appendChild( $b );
-        
+
     }
 	return $uploaded_med_arr;
 }
@@ -795,10 +813,10 @@ function PatientMedication($doc,$r,$pid,$med_limit)
 function PatientFreeformAllergy($doc,$r,$pid)
 {
     $res=sqlStatement("SELECT id,l.title as title1,lo.title as title2,comments FROM lists AS l
-    LEFT JOIN list_options AS lo ON l.outcome=lo.option_id AND lo.list_id='outcome'
+    LEFT JOIN list_options AS lo ON l.outcome = lo.option_id AND lo.list_id = 'outcome' AND lo.activity = 1
 	WHERE `type`='allergy' AND pid=? AND erx_source='0' and erx_uploaded='0' AND (enddate is null or enddate = '' or enddate = '0000-00-00')",array($pid));
 	$allergyId=array();
-    while($row=sqlFetchArray($res))    
+    while($row=sqlFetchArray($res))
     {
         $val=array();
         $val['id']=$row['id'];
@@ -834,21 +852,36 @@ function PatientFreeformAllergy($doc,$r,$pid)
 	return $allergyId;
 }
 
-function PatientFreeformHealthplans($doc,$r,$pid)
-{
-    $res=sqlStatement("SELECT `name`,`type` FROM insurance_companies AS ic, insurance_data AS id
-    WHERE ic.id=id.provider AND id.pid=?",array($pid));
-    while($row=sqlFetchArray($res))    
-    {    
-        $b = $doc->createElement( "PatientFreeformHealthplans" );
-            $allergyName = $doc->createElement( "healthplanName" );
-                $allergyName->appendChild(
-                    $doc->createTextNode( stripSpecialCharacter(trimData($row['name'],35)) )
-                );
-            $b->appendChild( $allergyName );
-        $r->appendChild( $b );
-    }
-}
+function PatientFreeformHealthplans($doc, $r, $pid) {
+    $resource = sqlStatement('SELECT
+            `ins`.`name`
+        FROM (
+            SELECT
+                `id`.`type`,
+                `ic`.`name`
+            FROM `insurance_data` AS `id`
+                LEFT JOIN `insurance_companies` AS `ic` ON `ic`.`id` = `id`.`provider`
+            WHERE `id`.`pid` = ?
+                AND `id`.`subscriber_relationship` = \'self\'
+                AND `id`.`provider` > 0
+            ORDER BY `id`.`date` DESC
+        ) AS `ins`
+        GROUP BY `ins`.`type`;',
+        array($pid)
+    );
+
+    while($row = sqlFetchArray($resource)) {
+        $healthplanName = $doc->createElement('healthplanName');
+        $healthplanName->appendChild($doc->createTextNode(
+            stripSpecialCharacter(trimData($row['name'], 35))
+        ));
+
+        $patientFreeformHealthplans = $doc->createElement('PatientFreeformHealthplans');
+        $patientFreeformHealthplans->appendChild($healthplanName);
+
+        $r->appendChild($patientFreeformHealthplans);
+     }
+ }
 
 function PrescriptionRenewalResponse($doc,$r,$pid)
 {
@@ -867,31 +900,31 @@ function PrescriptionRenewalResponse($doc,$r,$pid)
 }
 
 function checkError($xml)
-{    
+{
     $ch = curl_init($xml);
-    
+
     $data = array('RxInput' => $xml);
-    
+
     curl_setopt($ch, CURLOPT_URL, getErxPath());
     curl_setopt($ch, CURLOPT_POST, 1);
     curl_setopt($ch, CURLOPT_POSTFIELDS, "RxInput=".$xml);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
     curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
-    curl_setopt($ch, CURLOPT_COOKIESESSION, TRUE); 
+    curl_setopt($ch, CURLOPT_COOKIESESSION, TRUE);
     //curl_setopt($ch, CURLOPT_HEADER, 0);
-    curl_setopt($ch, CURLOPT_COOKIEFILE, "cookiefile"); 
+    curl_setopt($ch, CURLOPT_COOKIEFILE, "cookiefile");
     curl_setopt($ch, CURLOPT_COOKIEJAR, "cookiefile");
     curl_setopt($ch, CURLOPT_COOKIE, session_name() . '=' . session_id());
     curl_setopt($ch, CURLOPT_USERAGENT,"Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)");
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    
+
     $result=curl_exec($ch)  or die( curl_error($ch)) ;
     preg_match('/<textarea.*>(.*)Original XML:/is',$result,$error_message);
     if(strpos($result,'RxEntry.aspx')){
     erx_error_log($xml);
     erx_error_log($result);
     }
-    $arr=split('Error',$error_message[1]);
+    $arr=explode('Error',$error_message[1]);
     //echo "Te: ".count($arr);
     //print_r($arr);
     if(count($arr)==1)
@@ -931,4 +964,3 @@ function stripStrings($str,$pattern)
     }
     return $result;
 }
-?>

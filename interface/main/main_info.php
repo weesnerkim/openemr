@@ -1,12 +1,32 @@
 <?php
+/**
+ * Main info frame.
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @link    http://www.open-emr.org
+ */
+
+
+
+
 require_once("../globals.php");
 ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <HTML>
 <HEAD>
-<TITLE>
-Main Screen
-</TITLE>
+<TITLE><?php echo xlt('Calendar'); ?></TITLE>
 <!-- (CHEMED) -->
 <!-- The DOCTYPE is set above to XHTML to put IE into Sttrict Mode so we can get a viewport width -->
 <script type='text/javascript' language='JavaScript'>
@@ -33,8 +53,8 @@ var framesrc = '<frame ';
 
 <?php
 
-// this allows us to keep our viewtype between screens -- JRM
-$viewtype = 'day';
+// this allows us to keep our viewtype between screens -- JRM calendar_view_type
+$viewtype = $GLOBALS['calendar_view_type'];
 if (isset($_SESSION['viewtype'])) { $viewtype = $_SESSION['viewtype']; }
 
 // this allows us to keep our selected providers between screens -- JRM
@@ -82,7 +102,7 @@ framesrc += '&framewidth='+x+'"   name="Calendar" scrolling="auto" frameborder="
 
 <!-- (CHEMED) -->
 <script type='text/javascript' language='JavaScript'>
-    document.write('<frameset rows="*" cols="*" name="Main" frameborder="NO" border="0" framespacing="0"  <?php if ($_SESSION['cal_ui'] == 2) {echo 'onResize="window.location.href = window.location.href;"'; }?> >');
+    document.write('<frameset rows="*" cols="*" name="Main" frameborder="NO" border="0" framespacing="0" >');
     document.write(framesrc);
     document.write('</frameset>');
     document.close();
@@ -92,7 +112,7 @@ framesrc += '&framewidth='+x+'"   name="Calendar" scrolling="auto" frameborder="
 
 
 <noframes><body bgcolor="#FFFFFF">
-Frame support required
+<?php echo xlt('Frame support required'); ?>
 </body></noframes>
 
 </HTML>

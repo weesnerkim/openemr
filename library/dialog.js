@@ -38,7 +38,7 @@ retval=window.open(url, winname, options +
  ",width="   + width + ",height="  + height +
  ",left="    + newx  + ",top="     + newy   +
  ",screenX=" + newx  + ",screenY=" + newy);
-  
+
 return retval;
 }
 // recursive window focus-event grabber
@@ -57,11 +57,14 @@ function grabfocus(w) {
  // }
 }
 
-// call this when a "modal" dialog is desired
-function dlgopen(url, winname, width, height) {
+// Call this when a "modal" dialog is desired.
+// Note that the below function is used for the
+// frames ui, and that a separate dlgopen function
+// is used below (see if(top.tab_mode)...) for the tabs ui.
+ function dlgopen(url, winname, width, height) {
  if (top.modaldialog && ! top.modaldialog.closed) {
   if (window.focus) top.modaldialog.focus();
-  if (top.modaldialog.confirm("OK to close this other popup window?")) {
+  if (top.modaldialog.confirm(top.oemr_dialog_close_msg)) {
    top.modaldialog.close();
    top.modaldialog = null;
   } else {
@@ -72,4 +75,82 @@ function dlgopen(url, winname, width, height) {
   "resizable=1,scrollbars=1,location=0,toolbar=0");
  grabfocus(top);
  return false;
+}
+
+
+function dialogID()
+{
+  function s4() {
+    return Math.floor((1 + Math.random()) * 0x10000)
+      .toString(16)
+      .substring(1);
+  }
+  return s4() + s4() + s4() + s4() + s4() + + s4() + s4() + s4();
+}
+
+if(top.tab_mode)
+{
+    dlgOpenWindow=dlgopen;
+    dlgopen=function(url,winname,width,height,forceNewWindow)
+    {
+        top.restoreSession();
+
+        if(forceNewWindow)
+        {
+            return dlgOpenWindow(url,winname,width,height);
+        }
+        width=width+20;
+        height=height+20;
+        var fullURL;
+        if(url[0]==="/")
+        {
+            fullURL=url
+        }
+        else
+        {
+            fullURL=window.location.href.substr(0,window.location.href.lastIndexOf("/")+1)+url;
+        }
+        var dialogDiv=top.$("#dialogDiv");
+        var dlgIframe={};
+        if(winname!=="_blank")
+        {
+            dlgIframe=dialogDiv.find("iframe[name='"+winname+"']");
+        }
+        else
+        {
+            winname=dialogID();
+        }
+
+
+        dlgIframe=top.$("<iframe></iframe>");
+        dlgIframe.attr("name",winname);
+
+        var dlgDivContainer=top.$("<div class='dialogIframe'></div>");
+        var closeDlg=top.$("<div class='closeDlgIframe'></div>");
+        dlgDivContainer.append(closeDlg);
+        closeDlg.click(function()
+        {
+            var body=top.$("body");
+            var closeItems=body.find("[name='"+winname+"']");
+            closeItems.remove();
+            if(body.children("div.dialogIframe").length===0)
+            {
+                dialogDiv.hide();
+            };
+        })
+        dlgDivContainer.attr("name",winname);
+        dlgDivContainer.append(dlgIframe);
+        dlgDivContainer.css({"left":(top.$("body").width()-width)/2
+                       ,"top": "5em"
+                       ,"height":height
+                       ,"width":width});
+
+        top.$("body").append(dlgDivContainer);
+        top.set_opener(winname,window);
+        dlgIframe.get(0).src=fullURL;
+
+        dialogDiv.show();
+
+
+    }
 }

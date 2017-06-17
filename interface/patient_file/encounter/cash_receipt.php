@@ -10,10 +10,7 @@ require_once("$srcdir/billing.inc");
 require_once("$srcdir/pnotes.inc");
 require_once("$srcdir/patient.inc");
 require_once("$srcdir/report.inc");
-require_once(dirname(__file__) . "/../../../library/classes/Document.class.php");
-require_once(dirname(__file__) . "/../../../library/classes/Note.class.php");
 require_once("$srcdir/options.inc.php");
-require_once("$srcdir/formatting.inc.php");
 
  $N = 6;
  $first_issue = 1;
@@ -29,7 +26,7 @@ require_once("$srcdir/formatting.inc.php");
 <html>
 <head>
 <?php html_header_show();?>
-<link rel=stylesheet href="<?echo $css_header;?>" type="text/css">
+<link rel=stylesheet href="<?php echo $css_header;?>" type="text/css">
 </head>
 
 <body bgcolor="#ffffff" topmargin=0 rightmargin=0 leftmargin=2 bottommargin=0 marginwidth=2 marginheight=0>
@@ -58,10 +55,10 @@ require_once("$srcdir/formatting.inc.php");
   echo "<img src='$practice_logo' align='left'>\n";
  }
 ?>
-<h2><?=$facility['name']?></h2>
-<?=$facility['street']?><br>
-<?=$facility['city']?>, <?=$facility['state']?> <?=$facility['postal_code']?><br clear='all'>
-<?=$facility['phone']?><br>
+<h2><?php echo $facility['name']?></h2>
+<?php echo $facility['street']?><br>
+<?php echo $facility['city']?>, <?php echo $facility['state']?> <?php echo $facility['postal_code']?><br clear='all'>
+<?php echo $facility['phone']?><br>
 
 </p>
 
@@ -148,8 +145,8 @@ $encounter . "' and pid='$pid'"))
    } elseif ($val == "insurance") {
 
     print "<br><font class=bold>".xl('Primary Insurance Data').":</font><br>";
-    printRecDataOne($insurance_data_array, getRecInsuranceData ($pid,"primary"), $N);		
-    print "<font class=bold>".xl('Secondary Insurance Data').":</font><br>";	
+    printRecDataOne($insurance_data_array, getRecInsuranceData ($pid,"primary"), $N);
+    print "<font class=bold>".xl('Secondary Insurance Data').":</font><br>";
     printRecDataOne($insurance_data_array, getRecInsuranceData ($pid,"secondary"), $N);
     print "<font class=bold>".xl('Tertiary Insurance Data').":</font><br>";
     printRecDataOne($insurance_data_array, getRecInsuranceData ($pid,"tertiary"), $N);
@@ -164,7 +161,7 @@ $encounter . "' and pid='$pid'"))
      $total = 0.00;
      $copays = 0.00;
      foreach ($ar['newpatient'] as $be) {
-      $ta = split(":",$be);
+      $ta = explode(":",$be);
       $billing = getPatientBillingEncounter($pid,$ta[1]);
       $billings[] = $billing;
       foreach ($billing as $b) {
@@ -241,7 +238,8 @@ $encounter . "' and pid='$pid'"))
      $fname = basename($d->get_url());
      $extension = substr($fname, strrpos($fname,"."));
      echo "Document '" . $fname ."'<br>";
-     $notes = Note::notes_factory($d->get_id());
+     $n = new Note();
+     $notes = $n->notes_factory($d->get_id());
      echo "<table>";
      foreach ($notes as $note) {
       echo '<tr>';
@@ -259,7 +257,7 @@ $encounter . "' and pid='$pid'"))
       echo '<img src="' . $GLOBALS['webroot'] . "/controller.php?document&retrieve&patient_id=&document_id=" . $document_id . '"><br><br>';
      }
      else {
-      echo "<b>NOTE</b>: ".xl('Document')." '" . $fname ."' ".xl('cannot be displayed inline becuase its type is not supported by the browser').".<br><br>";	
+      echo "<b>NOTE</b>: ".xl('Document')." '" . $fname ."' ".xl('cannot be displayed inline becuase its type is not supported by the browser').".<br><br>";
      }
     }
    }
@@ -347,7 +345,7 @@ if ($result = getBillingByEncounter($pid,$encounter,"*") ) {
 			$billing_html[$iter["code_type"]] .= $html;
 			$counter++;
 		}
-		elseif ($iter["code_type"] == "COPAY") { 
+		elseif ($iter["code_type"] == "COPAY") {
 			$html .= "<tr><td>".xl('Payment').":</td><td>".xl('Thank You')."!</td><td>"
 				.$iter["code_text"]."</td><td>"
 				. oeFormatMoney($iter["code"]) . "</td></tr>\n";
@@ -363,7 +361,7 @@ if ($result = getBillingByEncounter($pid,$encounter,"*") ) {
 				."</td><td>" . oeFormatMoney($iter['fee']) . "</td></tr>\n";
 			$billing_html[$iter["code_type"]] .= $html;
 			$total += $iter['fee'];
-			$js = split(":",$iter['justify']);
+			$js = explode(":",$iter['justify']);
 			$counter = 0;
 			foreach ($js as $j) {
 				if(!empty($j)) {
@@ -374,15 +372,15 @@ if ($result = getBillingByEncounter($pid,$encounter,"*") ) {
 						$billing_html[$iter["code_type"]] .= " ($j)";
 					}
 					$counter++;
-				}		
+				}
 			}
-			
-		        	
+
+
 			$billing_html[$iter["code_type"]] .= "</span></td></tr>\n";
 		}
-			
+
 	}
-	
+
 $billing_html["CPT4"] .= "<tr><td>".xl('total')."</td><td></td><td></td><td>" . oeFormatMoney($total) . "</td></tr>\n";
 ?>
 <tr><td><?php xl('code type','e'); ?></td><td><?php xl('code','e'); ?></td><td><?php xl('description','e'); ?></td><td><?php xl('fee','e'); ?></td></tr>

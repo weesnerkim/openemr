@@ -1,21 +1,29 @@
 <?php
-// Copyright (C) 2011 Tony McCormick <tony@mi-squared.com>
-//                    Brady Miller   <brady@sparmy.com>
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * Open websearch for patient education materials
+ *
+ * Copyright (C) 2011 Tony McCormick <tony@mi-squared.com>
+ * Copyright (C) 2011 Brady Miller   <brady.g.miller@gmail.com>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author  Tony McCormick <tony@mi-squared.com>
+ * @author  Brady Miller <brady.g.miller@gmail.com>
+ * @link    http://www.open-emr.org
+ */
 
-// Open websearch for patient education materials
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 //Include required scripts/libraries
 require_once("../globals.php");
@@ -25,7 +33,7 @@ require_once("../globals.php");
 $websites = array(
   'Medline'   => 'http://vsearch.nlm.nih.gov/vivisimo/cgi-bin/query-meta?v%3Aproject=medlineplus&query=[%]&x=12&y=15',
   'eMedicine' => 'http://search.medscape.com/reference-search?newSearchHeader=1&queryText=[%]',
-  'WebMD'     => 'http://www.webmd.com/search/search_results/default.aspx?query=[%]&sourceType=undefined' 
+  'WebMD'     => 'http://www.webmd.com/search/search_results/default.aspx?query=[%]&sourceType=undefined'
 );
 
 // Collect variables
@@ -37,7 +45,7 @@ $form_diagnosis = (isset($_POST['form_diagnosis'])) ? $_POST['form_diagnosis'] :
 <head>
 <?php html_header_show();?>
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
-<script type="text/javascript" src="../../library/js/jquery.1.3.2.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-3-2/index.js"></script>
 
 <script type="text/javascript">
   function searchResultsPopup(search_term,link) {
@@ -47,7 +55,7 @@ $form_diagnosis = (isset($_POST['form_diagnosis'])) ? $_POST['form_diagnosis'] :
   }
 </script>
 
-<title><?echo htmlspecialchars( xl('Find Patient Education Materials'), ENT_NOQUOTES); ?></title>
+<title><?php echo htmlspecialchars( xl('Find Patient Education Materials'), ENT_NOQUOTES); ?></title>
 </head>
 
 <body class="body_top">
@@ -58,8 +66,8 @@ $form_diagnosis = (isset($_POST['form_diagnosis'])) ? $_POST['form_diagnosis'] :
 
 <div id="report_parameters">
 
-<table>
- <tr>
+    <table>
+        <tr class="misc-internet-search">
   <td>
 	<div style='float:left'>
 	<table class='text'>
@@ -92,7 +100,7 @@ $form_diagnosis = (isset($_POST['form_diagnosis'])) ? $_POST['form_diagnosis'] :
 		<tr>
 			<td>
 				<div style='margin-left:15px'>
-					<a href='#' class='css_button' onclick='$("#theform").submit();'>
+					<a href='#' class='css_button' onclick='top.restoreSession(); $("#theform").submit();'>
 					<span>
 						<?php echo htmlspecialchars( xl('Submit'), ENT_NOQUOTES); ?>
 					</span>

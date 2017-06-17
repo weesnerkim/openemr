@@ -1,12 +1,14 @@
 <?php
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
+/**
+ * patient.inc includes functions for manipulating patient information.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ */
 
-require_once("{$GLOBALS['srcdir']}/sql.inc");
-require_once(dirname(__FILE__) . "/classes/WSWrapper.class.php");
-require_once("{$GLOBALS['srcdir']}/formdata.inc.php");
+$facilityService = new \services\FacilityService();
 
 // These are for sports team use:
 $PLAYER_FITNESSES = array(
@@ -35,6 +37,16 @@ $policy_types = array(
   '47' => xl('Other Liability Insurance is Primary'),
 );
 
+/**
+ * Get a patient's demographic data.
+ *
+ * @param int    $pid   The PID of the patient
+ * @param string $given an optional subsection of the patient's demographic
+ *                      data to retrieve.
+ * @return array The requested subsection of a patient's demographic data.
+ *               If no subsection was given, returns everything, with the
+ *               date of birth as the last field.
+ */
 function getPatientData($pid, $given = "*, DATE_FORMAT(DOB,'%m/%d/%Y') as DOB_TS") {
     $sql = "select $given from patient_data where pid=? order by date DESC limit 0,1";
     return sqlQuery($sql, array($pid) );
@@ -53,18 +65,18 @@ function getLanguages() {
 }
 
 function getInsuranceProvider($ins_id) {
-    
+
     $sql = "select name from insurance_companies where id=?";
     $row = sqlQuery($sql,array($ins_id));
     return $row['name'];
-    
+
 }
 
 function getInsuranceProviders() {
     $returnval = array();
 
     if (true) {
-        $sql = "select name, id from insurance_companies order by name, id";
+        $sql = "select name, id from insurance_companies where inactive != 1 order by name, id";
         $rez = sqlStatement($sql);
         for($iter=0; $row=sqlFetchArray($rez); $iter++) {
             $returnval[$row['id']] = $row['name'];
@@ -94,13 +106,61 @@ function getInsuranceProviders() {
     return $returnval;
 }
 
+function getInsuranceProvidersExtra()
+{
+    $returnval = array();
+    // add a global and if for where to allow inactive inscompanies
+
+    $sql = "SELECT insurance_companies.name, insurance_companies.id, addresses.line1, addresses.line2, addresses.city,
+            addresses.state, addresses.zip
+            FROM insurance_companies, addresses
+            WHERE addresses.foreign_id = insurance_companies.id
+            AND insurance_companies.inactive != 1
+            ORDER BY insurance_companies.name, addresses.zip";
+
+    $rez = sqlStatement($sql);
+
+    for ($iter = 0; $row = sqlFetchArray($rez); $iter++) {
+        switch ($GLOBALS['insurance_information']) {
+            case $GLOBALS['insurance_information'] = '0':
+                $returnval[$row['id']] = $row['name'];
+                break;
+            case $GLOBALS['insurance_information'] = '1':
+                $returnval[$row['id']] = $row['name'] . " (" . $row['line1'] . ", " . $row['line2'] . ")";
+                break;
+            case $GLOBALS['insurance_information'] = '2':
+                $returnval[$row['id']] = $row['name'] . " (" . $row['line1'] . ", " . $row['line2'] . ", " . $row['zip'] . ")";
+                break;
+            case $GLOBALS['insurance_information'] = '3':
+                $returnval[$row['id']] = $row['name'] . " (" . $row['line1'] . ", " . $row['line2'] . ", " . $row['state'] . ")";
+                break;
+            case $GLOBALS['insurance_information'] = '4':
+                $returnval[$row['id']] = $row['name'] . " (" . $row['line1'] . ", " . $row['line2'] . ", " . $row['state'] .
+                    ", " . $row['zip'] . ")";
+                break;
+            case $GLOBALS['insurance_information'] = '5':
+                $returnval[$row['id']] = $row['name'] . " (" . $row['line1'] . ", " . $row['line2'] . ", " . $row['city'] .
+                    ", " . $row['state'] . ", " . $row['zip'] . ")";
+                break;
+            case $GLOBALS['insurance_information'] = '6':
+                preg_match("/\d+/", $row['line1'], $matches);
+                $returnval[$row['id']] = $row['name'] . " (" . $row['zip'] .
+                    "," . $matches[0] . ")";
+                break;
+        }
+    }
+
+    return $returnval;
+}
+
 function getProviders() {
     $returnval = array("");
-    $sql = "select fname, lname from users where authorized = 1 and " .
+    $sql = "select fname, lname, suffix from users where authorized = 1 and " .
         "active = 1 and username != ''";
     $rez = sqlStatement($sql);
     for($iter=0; $row=sqlFetchArray($rez); $iter++) {
         if (($row["fname"] != "") && ($row["lname"] != "")) {
+          if ($row["suffix"] != "") $row["lname"] .= ", ".$row["suffix"];
             array_push($returnval, $row["fname"] . " " . $row["lname"]);
         }
     }
@@ -114,25 +174,21 @@ function getProviders() {
 // may find additional uses.
 //
 function getFacility($facid=0) {
+  global $facilityService;
 
-  //create a sql binding array
-  $sqlBindArray = array();
-  
+  $facility = null;
+
   if ($facid > 0) {
-    $query = "SELECT * FROM facility WHERE id = ?";
-    array_push($sqlBindArray,$facid);
+    $facility = $facilityService->getById($facid);
   }
   else if ($facid == 0) {
-    $query = "SELECT * FROM facility ORDER BY " .
-      "billing_location DESC, service_location, id LIMIT 1";
+    $facility = $facilityService->getPrimaryBillingLocation();
   }
   else {
-    $query = "SELECT facility.* FROM users, facility WHERE " .
-      "users.id = ? AND " .
-      "facility.id = users.facility_id";
-    array_push($sqlBindArray,$_SESSION['authUserID']);
+    $facility = $facilityService->getFacilityForUser($_SESSION['authUserID']);
   }
-  return sqlQuery($query,$sqlBindArray);
+
+  return $facility;
 }
 
 // Generate a report title including report name and facility name, address
@@ -177,17 +233,15 @@ returns all facilities or just the id for the first one
 @return array | int for 'first' case
 */
 function getFacilities($first = '') {
-    $r = sqlStatement("SELECT * FROM facility ORDER BY id");
-    $ret = array();
-    while ( $row = sqlFetchArray($r) ) {
-       $ret[] = $row;
-}
+    global $facilityService;
 
-        if ( $first == 'first') {
-            return $ret[0]['id'];
-        } else {
-            return $ret;
-        }
+    $fres = $facilityService->getAll();
+
+    if ($first == 'first') {
+        return $fres[0]['id'];
+    } else {
+        return $fres;
+    }
 }
 
 /**
@@ -200,17 +254,15 @@ returns all service_location facilities or just the id for the first one
 @return array | int for 'first' case
 */
 function getServiceFacilities($first = '') {
-    $r = sqlStatement("SELECT * FROM facility WHERE service_location != 0 ORDER BY id");
-    $ret = array();
-    while ( $row = sqlFetchArray($r) ) {
-       $ret[] = $row;
-}
+    global $facilityService;
 
-        if ( $first == 'first') {
-            return $ret[0]['id'];
-        } else {
-            return $ret;
-        }
+    $fres = $facilityService->getAllServiceLocations();
+
+    if ($first == 'first') {
+        return $fres[0]['id'];
+    } else {
+        return $fres;
+    }
 }
 
 //(CHEMED) facility filter
@@ -228,9 +280,9 @@ function getProviderInfo($providerID = "%", $providers_only = true, $facility = 
     $param2 = "";
     if ($facility) {
       if ($GLOBALS['restrict_user_facility']) {
-        $param2 = " AND (facility_id = $facility 
+        $param2 = " AND (facility_id = $facility
           OR  $facility IN
-	        (select facility_id 
+	        (select facility_id
 	        from users_facility
 	        where tablename = 'users'
 	        and table_id = id)
@@ -247,17 +299,17 @@ function getProviderInfo($providerID = "%", $providers_only = true, $facility = 
     if ($providerID == "%") {
         $command = "like";
     }
-    $query = "select distinct id, username, lname, fname, authorized, info, facility " .
+    $query = "select distinct id, username, lname, fname, authorized, info, facility, suffix " .
         "from users where username != '' and active = 1 and id $command '" .
-        mysql_real_escape_string($providerID) . "' " . $param1 . $param2;
+        add_escape_custom($providerID) . "' " . $param1 . $param2;
     // sort by last name -- JRM June 2008
     $query .= " ORDER BY lname, fname ";
     $rez = sqlStatement($query);
     for($iter=0; $row=sqlFetchArray($rez); $iter++)
         $returnval[$iter]=$row;
 
-    //if only one result returned take the key/value pairs in array [0] and merge them down the the base array so that $resultval[0]['key'] is also
-    //accessible from $resultval['key']
+    //if only one result returned take the key/value pairs in array [0] and merge them down into
+    // the base array so that $resultval[0]['key'] is also accessible from $resultval['key']
 
     if($iter==1) {
         $akeys = array_keys($returnval[0]);
@@ -280,7 +332,7 @@ function getCalendarProviderInfo($providerID = "%", $providers_only = true) {
     }
     $query = "select distinct id, username, lname, fname, authorized, info, facility " .
         "from users where active = 1 and username != '' and id $command '" .
-        mysql_real_escape_string($providerID) . "' " . $param1;
+        add_escape_custom($providerID) . "' " . $param1;
 
     $rez = sqlStatement($query);
     for($iter=0; $row=sqlFetchArray($rez); $iter++)
@@ -292,6 +344,7 @@ function getCalendarProviderInfo($providerID = "%", $providers_only = true) {
 function getProviderName($providerID) {
     $pi = getProviderInfo($providerID, 'any');
     if (strlen($pi[0]["lname"]) > 0) {
+      if (strlen($pi[0]["suffix"]) > 0) $pi[0]["lname"] .= ", ".$pi[0]["suffix"];
         return $pi[0]['fname'] . " " . $pi[0]['lname'];
     }
     return "";
@@ -331,6 +384,10 @@ function getHistoryData($pid, $given = "*", $dateStart='',$dateEnd='')
     }
     else {
         $res = sqlQuery("select $given from history_data where pid=? order by date DESC limit 0,1", array($pid) );
+    }
+
+    if($given == 'tobacco'){
+    	$res = sqlQuery("select $given from history_data where pid = ? and tobacco is not null and date >= ? and date <= ? order by date DESC limit 0,1", array($pid,$dateStart,$dateEnd));
     }
 
     return $res;
@@ -374,33 +431,80 @@ function _set_patient_inc_count($limit, $count, $where, $whereBindArray=array())
   }
 }
 
-function getPatientLnames($lname = "%", $given = "pid, id, lname, fname, mname, providerID, DATE_FORMAT(DOB,'%m/%d/%Y') as DOB_TS", $orderby = "lname ASC, fname ASC", $limit="all", $start="0")
+/**
+ * Allow the last name to be followed by a comma and some part of a first name(can
+ *   also place middle name after the first name with a space separating them)
+ * Allows comma alone followed by some part of a first name(can also place middle name
+ *   after the first name with a space separating them).
+ * Allows comma alone preceded by some part of a last name.
+ * If no comma or space, then will search both last name and first name.
+ * If the first letter of either name is capital, searches for name starting
+ *   with given substring (the expected behavior). If it is lower case, it
+ *   searches for the substring anywhere in the name. This applies to either
+ *   last name, first name, and middle name.
+ * Also allows first name followed by middle and/or last name when separated by spaces.
+ * @param string $term
+ * @param string $given
+ * @param string $orderby
+ * @param string $limit
+ * @param string $start
+ * @return array
+ */
+function getPatientLnames($term = "%", $given = "pid, id, lname, fname, mname, providerID, DATE_FORMAT(DOB,'%m/%d/%Y') as DOB_TS", $orderby = "lname ASC, fname ASC", $limit="all", $start="0")
 {
-    // Allow the last name to be followed by a comma and some part of a first name.
-    // New behavior for searches:
-    // Allows comma alone followed by some part of a first name
-    // If the first letter of either name is capital, searches for name starting
-    // with given substring (the expected behavior).  If it is lower case, it
-    // it searches for the substring anywhere in the name.  This applies to either
-    // last name or first name or both.  The arbitrary limit of 100 results is set
-    // in the sql query below. --Mark Leeds
-    $lname = trim($lname);
-    $fname = '';
-     if (preg_match('/^(.*),(.*)/', $lname, $matches)) {
-         $lname = trim($matches[1]);
-         $fname = trim($matches[2]);
+    $names = getPatientNameSplit($term);
+
+    foreach ($names as $key => $val) {
+      if (!empty($val)) {
+        if ((strlen($val) > 1) && ($names[$key][0] != strtoupper($names[$key][0]))) {
+            $names[$key] = '%' . $val . '%';
+        } else {
+            $names[$key] = $val . '%';
+        }
+      }
     }
-    $search_for_pieces1 = '';
-    $search_for_pieces2 = '';
-    if ((strlen($lname) < 1)|| ($lname{0} != strtoupper($lname{0}))) {$search_for_pieces1 = '%';}
-    if ((strlen($fname) < 1)|| ($fname{0} != strtoupper($fname{0}))) {$search_for_pieces2 = '%';}
+
+    // Debugging section below
+    //if(array_key_exists('first',$names)) {
+    //    error_log("first name search term :".$names['first']);
+    //}
+    //if(array_key_exists('middle',$names)) {
+    //    error_log("middle name search term :".$names['middle']);
+    //}
+    //if(array_key_exists('last',$names)) {
+    //    error_log("last name search term :".$names['last']);
+    //}
+    // Debugging section above
 
     $sqlBindArray = array();
-    $where = "lname LIKE ? AND fname LIKE ? ";
-    array_push($sqlBindArray, $search_for_pieces1.$lname."%", $search_for_pieces2.$fname."%");
+    if(array_key_exists('last',$names) && $names['last'] == '') {
+        // Do not search last name
+        $where = "fname LIKE ? ";
+        array_push($sqlBindArray, $names['first']);
+        if ($names['middle'] != '') {
+            $where .= "AND mname LIKE ? ";
+            array_push($sqlBindArray, $names['middle']);
+        }
+    } elseif(array_key_exists('first',$names) && $names['first'] == '') {
+        // Do not search first name or middle name
+        $where = "lname LIKE ? ";
+        array_push($sqlBindArray, $names['last']);
+    } elseif($names['first'] == '' && $names['last'] != '') {
+        // Search both first name and last name with same term
+        $names['first'] = $names['last'];
+        $where = "lname LIKE ? OR fname LIKE ? ";
+        array_push($sqlBindArray, $names['last'], $names['first']);
+    } elseif ($names['middle'] != '') {
+        $where = "lname LIKE ? AND fname LIKE ? AND mname LIKE ? ";
+        array_push($sqlBindArray, $names['last'], $names['first'], $names['middle']);
+    } else {
+        $where = "lname LIKE ? AND fname LIKE ? ";
+        array_push($sqlBindArray, $names['last'], $names['first']);
+    }
+
         if (!empty($GLOBALS['pt_restrict_field'])) {
                 if ( $_SESSION{"authUser"} != 'admin' || $GLOBALS['pt_restrict_admin'] ) {
-                        $where .= "AND ( patient_data." . add_escape_custom($GLOBALS['pt_restrict_field']) .
+                        $where .= " AND ( patient_data." . add_escape_custom($GLOBALS['pt_restrict_field']) .
                             " = ( SELECT facility_id FROM users WHERE username = ?) OR patient_data." .
                             add_escape_custom($GLOBALS['pt_restrict_field']) . " = '' ) ";
 			array_push($sqlBindArray, $_SESSION{"authUser"});
@@ -418,6 +522,48 @@ function getPatientLnames($lname = "%", $given = "pid, id, lname, fname, mname, 
 
     _set_patient_inc_count($limit, count($returnval), $where, $sqlBindArray);
     return $returnval;
+}
+/**
+ * Accept a string used by a search function expected to find a patient name,
+ * then split up the string if a comma or space exists. Return an array having
+ * from 1 to 3 elements, named first, middle, and last.
+ * See above getPatientLnames() function for details on how the splitting occurs.
+ * @param string $term
+ * @return array
+ */
+function getPatientNameSplit($term) {
+    $term = trim($term);
+    if (strpos($term, ',') !== false) {
+        $names = explode(',', $term);
+        $n['last'] = $names[0];
+        if (strpos(trim($names[1]), ' ') !== false) {
+            list($n['first'], $n['middle']) = explode(' ', trim($names[1]));
+        } else {
+            $n['first'] = $names[1];
+        }
+    } elseif (strpos($term, ' ') !== false) {
+        $names = explode(' ', $term);
+        if (count($names) == 1) {
+            $n['last'] = $names[0];
+        } elseif (count($names) == 3) {
+            $n['first'] = $names[0];
+            $n['middle'] = $names[1];
+            $n['last'] = $names[2];
+        } else {
+            // This will handle first and last name or first followed by
+            // multiple names only using just the last of the names in the list.
+            $n['first'] = $names[0];
+            $n['last'] = end($names);
+        }
+    } else {
+        $n['last'] = $term;
+	if(empty($n['last'])) $n['last'] = '%';
+    }
+    // Trim whitespace off the names before returning
+    foreach($n as $key => $val) {
+        $n[$key] = trim($val);
+    }
+    return $n; // associative array containing names
 }
 
 function getPatientId($pid = "%", $given = "pid, id, lname, fname, mname, providerID, DATE_FORMAT(DOB,'%m/%d/%Y') as DOB_TS", $orderby = "lname ASC, fname ASC", $limit="all", $start="0")
@@ -472,7 +618,7 @@ function getByPatientDemographicsFilter($searchFields, $searchTerm = "%",
   $given = "pid, id, lname, fname, mname, providerID, DATE_FORMAT(DOB,'%m/%d/%Y') as DOB_TS",
   $orderby = "lname ASC, fname ASC", $limit="all", $start="0", $search_service_code='')
 {
-	$layoutCols = split( '~', $searchFields );
+	$layoutCols = explode( '~', $searchFields );
   $sqlBindArray = array();
   $where = "";
   $i = 0;
@@ -609,7 +755,7 @@ function getPatientSSN($ss = "%", $given = "pid, id, lname, fname, mname, provid
 //(CHEMED) Search by phone number
 function getPatientPhone($phone = "%", $given = "pid, id, lname, fname, mname, providerID", $orderby = "lname ASC, fname ASC", $limit="all", $start="0")
 {
-    $phone = ereg_replace( "[[:punct:]]","", $phone );
+    $phone = preg_replace( "/[[:punct:]]/","", $phone );
     $sqlBindArray = array();
     $where = "REPLACE(REPLACE(phone_home, '-', ''), ' ', '') REGEXP ?";
     array_push($sqlBindArray, $phone);
@@ -676,6 +822,7 @@ function newPatientData(    $db_id="",
                 $genericval1 = "",
                 $genericname2 = "",
                 $genericval2 = "",
+                $billing_note="",
                 $phone_cell = "",
                 $hipaa_mail = "",
                 $hipaa_voice = "",
@@ -706,7 +853,7 @@ function newPatientData(    $db_id="",
 
     // Get the default price level.
     $lrow = sqlQuery("SELECT option_id FROM list_options WHERE " .
-      "list_id = 'pricelevel' ORDER BY is_default DESC, seq ASC LIMIT 1");
+      "list_id = 'pricelevel' AND activity = 1 ORDER BY is_default DESC, seq ASC LIMIT 1");
     $pricelevel = empty($lrow['option_id']) ? '' : $lrow['option_id'];
 
     $query = ("replace into patient_data set
@@ -748,6 +895,7 @@ function newPatientData(    $db_id="",
         genericval1 = '$genericval1',
         genericname2 = '$genericname2',
         genericval2 = '$genericval2',
+        billing_note= '$billing_note',
         phone_cell = '$phone_cell',
         pharmacy_id = '$pharmacy_id',
         hipaa_mail = '$hipaa_mail',
@@ -762,16 +910,13 @@ function newPatientData(    $db_id="",
         date=NOW()");
 
     $id = sqlInsert($query);
- 
+
     if ( !$db_id ) {
       // find the last inserted id for new patient case
-      $db_id = mysql_insert_id();
+      $db_id = getSqlLastID();
     }
 
     $foo = sqlQuery("select pid from patient_data where id='$id' order by date limit 0,1");
-
-    sync_patient($id,$fname,$lname,$street,$city,$postal_code,$state,$phone_home,
-                $phone_biz,$phone_cell,$email,$pid);
 
     return $foo['pid'];
 }
@@ -807,13 +952,13 @@ function fixDate($date, $default="0000-00-00") {
 
 function pdValueOrNull($key, $value) {
   if (($key == 'DOB' || $key == 'regdate' || $key == 'contrastart' ||
-    substr($key, 0, 8) == 'userdate') &&
+    substr($key, 0, 8) == 'userdate' || $key == 'deceased_date') &&
     (empty($value) || $value == '0000-00-00'))
   {
     return "NULL";
   }
   else {
-    return "'$value'";
+    return "'" . add_escape_custom($value) . "'";
   }
 }
 
@@ -842,7 +987,7 @@ function updatePatientData($pid, $new, $create=false)
   $new['DOB'] = fixDate($new['DOB']);
 
   if ($create) {
-    $sql = "INSERT INTO patient_data SET pid = '$pid', date = NOW()";
+    $sql = "INSERT INTO patient_data SET pid = '" . add_escape_custom($pid) . "', date = NOW()";
     foreach ($new as $key => $value) {
       if ($key == 'id') continue;
       $sql .= ", `$key` = " . pdValueOrNull($key, $value);
@@ -851,25 +996,20 @@ function updatePatientData($pid, $new, $create=false)
   }
   else {
     $db_id = $new['id'];
-    $rez = sqlQuery("SELECT pid FROM patient_data WHERE id = '$db_id'");
+    $rez = sqlQuery("SELECT pid FROM patient_data WHERE id = '" . add_escape_custom($db_id) . "'");
     // Check for brain damage:
     if ($pid != $rez['pid']) {
       $errmsg = "Internal error: Attempt to change patient data with pid = '" .
-        $rez['pid'] . "' when current pid is '$pid' for id '$db_id'";
+        text($rez['pid']) . "' when current pid is '" . text($pid) . "' for id '" . text($db_id) . "'";
       die($errmsg);
     }
     $sql = "UPDATE patient_data SET date = NOW()";
     foreach ($new as $key => $value) {
       $sql .= ", `$key` = " . pdValueOrNull($key, $value);
     }
-    $sql .= " WHERE id = '$db_id'";
+    $sql .= " WHERE id = '" . add_escape_custom($db_id) . "'";
     sqlStatement($sql);
   }
-
-  $rez = sqlQuery("SELECT * FROM patient_data WHERE id = '$db_id'");
-  sync_patient($db_id,$rez['fname'],$rez['lname'],$rez['street'],$rez['city'],
-    $rez['postal_code'],$rez['state'],$rez['phone_home'],$rez['phone_biz'],
-    $rez['phone_cell'],$rez['email'],$rez['pid']);
 
   return $db_id;
 }
@@ -902,10 +1042,10 @@ function updateEmployerData($pid, $new, $create=false)
   $colnames = array('name','street','city','state','postal_code','country');
 
   if ($create) {
-    $set .= "pid = '$pid', date = NOW()";
+    $set .= "pid = '" . add_escape_custom($pid) . "', date = NOW()";
     foreach ($colnames as $key) {
       $value = isset($new[$key]) ? $new[$key] : '';
-      $set .= ", `$key` = '$value'";
+      $set .= ", `$key` = '" . add_escape_custom($value) . "'";
     }
     return sqlInsert("INSERT INTO employer_data SET $set");
   }
@@ -914,15 +1054,15 @@ function updateEmployerData($pid, $new, $create=false)
     $old = getEmployerData($pid);
     $modified = false;
     foreach ($colnames as $key) {
-      $value = empty($old[$key]) ? '' : addslashes($old[$key]);
+      $value = empty($old[$key]) ? '' : $old[$key];
       if (isset($new[$key]) && strcmp($new[$key], $value) != 0) {
         $value = $new[$key];
         $modified = true;
       }
-      $set .= "`$key` = '$value', ";
+      $set .= "`$key` = '" . add_escape_custom($value) . "', ";
     }
     if ($modified) {
-      $set .= "pid = '$pid', date = NOW()";
+      $set .= "pid = '" . add_escape_custom($pid) . "', date = NOW()";
       return sqlInsert("INSERT INTO employer_data SET $set");
     }
     return $old['id'];
@@ -970,7 +1110,7 @@ function newInsuranceData(
   $effective_date = fixDate($effective_date, date('Y-m-d'));
 
   $idres = sqlStatement("SELECT * FROM insurance_data WHERE " .
-    "pid = '$pid' AND type = '$type' ORDER BY date DESC");
+    "pid = ? AND type = ? ORDER BY date DESC", array($pid,$type));
   $idrow = sqlFetchArray($idres);
 
   // Replace the most recent entry in any of the following cases:
@@ -991,8 +1131,8 @@ function newInsuranceData(
       }
       else {
         $ferow = sqlQuery("SELECT count(*) AS count FROM form_encounter " .
-          "WHERE pid = '$pid' AND date < '$effective_date 00:00:00' AND " .
-          "date >= '" . $idrow['date'] . " 00:00:00'");
+          "WHERE pid = ? AND date < ? AND " .
+          "date >= ?", array($pid, $effective_date." 00:00:00", $idrow['date']." 00:00:00"));
         if ($ferow['count'] == 0) $replace = true;
       }
     }
@@ -1004,8 +1144,8 @@ function newInsuranceData(
     // date can wipe out previous insurance history.  So we want some data
     // entry validation somewhere.
     sqlStatement("DELETE FROM insurance_data WHERE " .
-      "pid = '$pid' AND type = '$type' AND date >= '$effective_date' AND " .
-      "id != " . $idrow['id']);
+      "pid = ? AND type = ? AND date >= ? AND " .
+      "id != ?", array($pid, $type, $effective_date, $idrow['id']));
 
     $data = array();
     $data['type'] = $type;
@@ -1042,35 +1182,35 @@ function newInsuranceData(
   }
   else {
     return sqlInsert("INSERT INTO insurance_data SET
-      type = '$type',
-      provider = '$provider',
-      policy_number = '$policy_number',
-      group_number = '$group_number',
-      plan_name = '$plan_name',
-      subscriber_lname = '$subscriber_lname',
-      subscriber_mname = '$subscriber_mname',
-      subscriber_fname = '$subscriber_fname',
-      subscriber_relationship = '$subscriber_relationship',
-      subscriber_ss = '$subscriber_ss',
-      subscriber_DOB = '$subscriber_DOB',
-      subscriber_street = '$subscriber_street',
-      subscriber_postal_code = '$subscriber_postal_code',
-      subscriber_city = '$subscriber_city',
-      subscriber_state = '$subscriber_state',
-      subscriber_country = '$subscriber_country',
-      subscriber_phone = '$subscriber_phone',
-      subscriber_employer = '$subscriber_employer',
-      subscriber_employer_city = '$subscriber_employer_city',
-      subscriber_employer_street = '$subscriber_employer_street',
-      subscriber_employer_postal_code = '$subscriber_employer_postal_code',
-      subscriber_employer_state = '$subscriber_employer_state',
-      subscriber_employer_country = '$subscriber_employer_country',
-      copay = '$copay',
-      subscriber_sex = '$subscriber_sex',
-      pid = '$pid',
-      date = '$effective_date',
-      accept_assignment = '$accept_assignment',
-      policy_type = '$policy_type'
+      type = '" . add_escape_custom($type) . "',
+      provider = '" . add_escape_custom($provider) . "',
+      policy_number = '" . add_escape_custom($policy_number) . "',
+      group_number = '" . add_escape_custom($group_number) . "',
+      plan_name = '" . add_escape_custom($plan_name) . "',
+      subscriber_lname = '" . add_escape_custom($subscriber_lname) . "',
+      subscriber_mname = '" . add_escape_custom($subscriber_mname) . "',
+      subscriber_fname = '" . add_escape_custom($subscriber_fname) . "',
+      subscriber_relationship = '" . add_escape_custom($subscriber_relationship) . "',
+      subscriber_ss = '" . add_escape_custom($subscriber_ss) . "',
+      subscriber_DOB = '" . add_escape_custom($subscriber_DOB) . "',
+      subscriber_street = '" . add_escape_custom($subscriber_street) . "',
+      subscriber_postal_code = '" . add_escape_custom($subscriber_postal_code) . "',
+      subscriber_city = '" . add_escape_custom($subscriber_city) . "',
+      subscriber_state = '" . add_escape_custom($subscriber_state) . "',
+      subscriber_country = '" . add_escape_custom($subscriber_country) . "',
+      subscriber_phone = '" . add_escape_custom($subscriber_phone) . "',
+      subscriber_employer = '" . add_escape_custom($subscriber_employer) . "',
+      subscriber_employer_city = '" . add_escape_custom($subscriber_employer_city) . "',
+      subscriber_employer_street = '" . add_escape_custom($subscriber_employer_street) . "',
+      subscriber_employer_postal_code = '" . add_escape_custom($subscriber_employer_postal_code) . "',
+      subscriber_employer_state = '" . add_escape_custom($subscriber_employer_state) . "',
+      subscriber_employer_country = '" . add_escape_custom($subscriber_employer_country) . "',
+      copay = '" . add_escape_custom($copay) . "',
+      subscriber_sex = '" . add_escape_custom($subscriber_sex) . "',
+      pid = '" . add_escape_custom($pid) . "',
+      date = '" . add_escape_custom($effective_date) . "',
+      accept_assignment = '" . add_escape_custom($accept_assignment) . "',
+      policy_type = '" . add_escape_custom($policy_type) . "'
     ");
   }
 }
@@ -1089,8 +1229,8 @@ function updateInsuranceData($id, $new)
 
   $sql = "UPDATE insurance_data SET ";
   while(list($key, $value) = each($use))
-    $sql .= "`$key` = '$value', ";
-  $sql = substr($sql, 0, -2) . " WHERE id = '$id'";
+    $sql .= "`$key` = '" . add_escape_custom($value) . "', ";
+  $sql = substr($sql, 0, -2) . " WHERE id = '" . add_escape_custom($id) . "'";
 
   sqlStatement($sql);
 }
@@ -1128,69 +1268,7 @@ function updateHistoryData($pid,$new)
         return sqlInsert($sql, $arraySqlBind );
 }
 
-function sync_patient($id,$fname,$lname,$street,$city,$postal_code,$state,$phone_home,
-                $phone_biz,$phone_cell,$email,$pid="")
-{
-    if ($GLOBALS['oer_config']['ws_accounting']['enabled'] === 2) return;
-    if (!$GLOBALS['oer_config']['ws_accounting']['enabled']) return;
-
-    $db = $GLOBALS['adodb']['db'];
-    $customer_info = array();
-
-    $sql = "SELECT foreign_id,foreign_table FROM integration_mapping where local_table = 'patient_data' and local_id = '" . $id . "'";
-    $result = $db->Execute($sql);
-    if ($result && !$result->EOF) {
-        $customer_info['foreign_update'] = true;
-        $customer_info['foreign_id'] = $result->fields['foreign_id'];
-        $customer_info['foreign_table'] = $result->fields['foreign_table'];
-    }
-
-    ///xml rpc code to connect to accounting package and add user to it
-    $customer_info['firstname'] = $fname;
-    $customer_info['lastname'] = $lname;
-    $customer_info['address'] = $street;
-    $customer_info['suburb'] = $city;
-    $customer_info['state'] = $state;
-    $customer_info['postcode'] = $postal_code;
-
-    //ezybiz wants state as a code rather than abbreviation
-    $customer_info['geo_zone_id'] = "";
-    $sql = "SELECT zone_id from geo_zone_reference where zone_code = '" . strtoupper($state) . "'";
-    $db = $GLOBALS['adodb']['db'];
-    $result = $db->Execute($sql);
-    if ($result && !$result->EOF) {
-        $customer_info['geo_zone_id'] = $result->fields['zone_id'];
-    }
-
-    //ezybiz wants country as a code rather than abbreviation
-    $customer_info['geo_country_id'] = "";
-    $sql = "SELECT countries_id from geo_country_reference where countries_iso_code_2 = '" . strtoupper($country_code) . "'";
-    $db = $GLOBALS['adodb']['db'];
-    $result = $db->Execute($sql);
-    if ($result && !$result->EOF) {
-        $customer_info['geo_country_id'] = $result->fields['countries_id'];
-    }
-
-    $customer_info['phone1'] = $phone_home;
-    $customer_info['phone1comment'] = "Home Phone";
-    $customer_info['phone2'] = $phone_biz;
-    $customer_info['phone2comment'] = "Business Phone";
-    $customer_info['phone3'] = $phone_cell;
-    $customer_info['phone3comment'] = "Cell Phone";
-    $customer_info['email'] = $email;
-    $customer_info['customernumber'] = $pid;
-
-    $function['ezybiz.add_customer'] = array(new xmlrpcval($customer_info,"struct"));
-    $ws = new WSWrapper($function);
-
-    // if the remote patient was added make an entry in the local mapping table to that updates can be made correctly
-    if (is_numeric($ws->value)) {
-        $sql = "REPLACE INTO integration_mapping set id = '" . $db->GenID("sequences") . "', foreign_id ='" . $ws->value . "', foreign_table ='customer', local_id = '" . $id . "', local_table = 'patient_data' ";
-        $db->Execute($sql) or die ("error: " . $db->ErrorMsg());
-    }
-}
-
-// Returns Age 
+// Returns Age
 //   in months if < 2 years old
 //   in years  if > 2 years old
 // given YYYYMMDD from MySQL DATE_FORMAT(DOB,'%Y%m%d')
@@ -1200,7 +1278,7 @@ function getPatientAge($dobYMD, $nowYMD=null)
     // strip any dashes from the DOB
     $dobYMD = preg_replace("/-/", "", $dobYMD);
     $dobDay = substr($dobYMD,6,2); $dobMonth = substr($dobYMD,4,2); $dobYear = substr($dobYMD,0,4);
-    
+
     // set the 'now' date values
     if ($nowYMD == null) {
         $nowDay = date("d");
@@ -1219,18 +1297,125 @@ function getPatientAge($dobYMD, $nowYMD=null)
 
     $ageInMonths = (($nowYear * 12) + $nowMonth) - (($dobYear*12) + $dobMonth);
 
+    // We want the age in FULL months, so if the current date is less than the numerical day of birth, subtract a month
+    if($dayDiff<0) { $ageInMonths-=1; }
+
     if ( $ageInMonths > 24 ) {
         $age = $yearDiff;
         if (($monthDiff == 0) && ($dayDiff < 0)) { $age -= 1; }
         else if ($monthDiff < 0) { $age -= 1; }
     }
     else  {
-        $age = "$ageInMonths month"; 
+        $age = "$ageInMonths " . xl('month');
     }
 
     return $age;
 }
 
+/**
+ * Wrapper to make sure the clinical rules dates formats corresponds to the
+ * format expected by getPatientAgeYMD
+ *
+ * @param  string  $dob     date of birth
+ * @param  string  $target  date to calculate age on
+ * @return array containing
+ *      age - decimal age in years
+ *      age_in_months - decimal age in months
+ *      ageinYMD - formatted string #y #m #d */
+function parseAgeInfo($dob,$target)
+{
+    // Prepare dob (expected in order Y M D, remove whatever delimiters might be there
+    $dateDOB = preg_replace("/[-\s\/]/", "", $dob);;
+    // Prepare target (Y-M-D H:M:S)
+    $dateTarget = preg_replace("/[-\s\/]/","",$target);
+
+    return getPatientAgeYMD($dateDOB,$dateTarget);
+
+}
+
+/**
+ *
+ * @param type $dob
+ * @param type $date
+ * @return array containing
+ *      age - decimal age in years
+ *      age_in_months - decimal age in months
+ *      ageinYMD - formatted string #y #m #d
+ */
+function getPatientAgeYMD($dob, $date=null) {
+
+    if ($date == null) {
+        $daynow = date("d");
+        $monthnow = date("m");
+        $yearnow = date("Y");
+        $datenow=$yearnow.$monthnow.$daynow;
+    }
+    else {
+        $datenow=preg_replace("/-/", "", $date);
+        $yearnow=substr($datenow,0,4);
+        $monthnow=substr($datenow,4,2);
+        $daynow=substr($datenow,6,2);
+        $datenow=$yearnow.$monthnow.$daynow;
+    }
+
+    $dob=preg_replace("/-/", "", $dob);
+    $dobyear=substr($dob,0,4);
+    $dobmonth=substr($dob,4,2);
+    $dobday=substr($dob,6,2);
+    $dob=$dobyear.$dobmonth.$dobday;
+
+    //to compensate for 30, 31, 28, 29 days/month
+    $mo=$monthnow; //to avoid confusion with later calculation
+
+    if ($mo==05 or $mo==07 or $mo==10 or $mo==12) {  //determined by monthnow-1
+        $nd=30; //nd = number of days in a month, if monthnow is 5, 7, 9, 12 then
+    }  // look at April, June, September, November for calculation.  These months only have 30 days.
+    elseif ($mo==03) { // for march, look to the month of February for calculation, check for leap year
+        $check_leap_Y=$yearnow/4; // To check if this is a leap year.
+        if (is_int($check_leap_Y)) {$nd=29;} //If it true then this is the leap year
+        else {$nd=28;} //otherwise, it is not a leap year.
+    }
+    else {$nd=31;} // other months have 31 days
+
+    $bdthisyear=$yearnow.$dobmonth.$dobday; //Date current year's birthday falls on
+    if ($datenow < $bdthisyear) // if patient hasn't had birthday yet this year
+    {
+        $age_year = $yearnow - $dobyear - 1;
+        if ($daynow < $dobday) {
+            $months_since_birthday=12 - $dobmonth + $monthnow - 1;
+            $days_since_dobday=$nd - $dobday + $daynow; //did not take into account for month with 31 days
+        }
+        else {
+            $months_since_birthday=12 - $dobmonth + $monthnow;
+            $days_since_dobday=$daynow - $dobday;
+        }
+    }
+    else // if patient has had birthday this calandar year
+    {
+        $age_year = $yearnow - $dobyear;
+        if ($daynow < $dobday) {
+            $months_since_birthday=$monthnow - $dobmonth -1;
+            $days_since_dobday=$nd - $dobday + $daynow;
+        }
+        else {
+            $months_since_birthday=$monthnow - $dobmonth;
+            $days_since_dobday=$daynow - $dobday;
+        }
+    }
+
+    $day_as_month_decimal = $days_since_dobday / 30;
+    $months_since_birthday_float = $months_since_birthday + $day_as_month_decimal;
+    $month_as_year_decimal = $months_since_birthday_float / 12;
+    $age_float = $age_year + $month_as_year_decimal;
+
+    $age_in_months = $age_year * 12 + $months_since_birthday_float;
+    $age_in_months = round($age_in_months,2);  //round the months to xx.xx 2 floating points
+    $age = round($age_float,2);
+
+    // round the years to 2 floating points
+    $ageinYMD = $age_year."y ".$months_since_birthday."m ".$days_since_dobday."d";
+    return compact('age','age_in_months','ageinYMD');
+}
 
 // Returns Age in days
 //   in months if < 2 years old
@@ -1243,7 +1428,7 @@ function getPatientAgeInDays($dobYMD, $nowYMD=null) {
     // strip any dashes from the DOB
     $dobYMD = preg_replace("/-/", "", $dobYMD);
     $dobDay = substr($dobYMD,6,2); $dobMonth = substr($dobYMD,4,2); $dobYear = substr($dobYMD,0,4);
-    
+
     // set the 'now' date values
     if ($nowYMD == null) {
         $nowDay = date("d");
@@ -1260,11 +1445,37 @@ function getPatientAgeInDays($dobYMD, $nowYMD=null) {
     $dobtime = strtotime($dobYear."-".$dobMonth."-".$dobDay);
     $nowtime = strtotime($nowYear."-".$nowMonth."-".$nowDay);
     $timediff = $nowtime - $dobtime;
-    $age = $timediff / 86400;
+    $age = $timediff / 86400; // 24 hours * 3600 seconds/hour  = 86400 seconds
 
     return $age;
 }
+/**
+ * Returns a string to be used to display a patient's age
+ *
+ * @param type $dobYMD
+ * @param type $asOfYMD
+ * @return string suitable for displaying patient's age based on preferences
+ */
+function getPatientAgeDisplay($dobYMD, $asOfYMD=null)
+{
+    if($GLOBALS['age_display_format']=='1')
+    {
+        $ageYMD=getPatientAgeYMD($dobYMD,$asOfYMD);
+        if(isset($GLOBALS['age_display_limit']) && $ageYMD['age']<=$GLOBALS['age_display_limit'])
+        {
+            return $ageYMD['ageinYMD'];
+        }
+        else
+        {
+            return getPatientAge($dobYMD, $asOfYMD);
+        }
+    }
+    else
+    {
+        return getPatientAge($dobYMD, $asOfYMD);
+    }
 
+}
 function dateToDB ($date)
 {
     $date=substr ($date,6,4)."-".substr ($date,3,2)."-".substr($date, 0,2);
@@ -1275,9 +1486,9 @@ function dateToDB ($date)
 // ----------------------------------------------------------------------------
 /**
  * DROPDOWN FOR COUNTRIES
- * 
+ *
  * build a dropdown with all countries from geo_country_reference
- * 
+ *
  * @param int $selected - id for selected record
  * @param string $name - the name/id for select form
  * @return void - just echo the html encoded string
@@ -1299,12 +1510,12 @@ function dropdown_countries($selected = 0, $name = 'country_code') {
 // ----------------------------------------------------------------------------
 /**
  * DROPDOWN FOR YES/NO
- * 
+ *
  * build a dropdown with two options (yes - 1, no - 0)
- * 
+ *
  * @param int $selected - id for selected record
  * @param string $name - the name/id for select form
- * @return void - just echo the html encoded string 
+ * @return void - just echo the html encoded string
  */
 function dropdown_yesno($selected = 0, $name = 'yesno') {
     $string = "<select name='$name' id='$name'>";
@@ -1323,9 +1534,9 @@ function dropdown_yesno($selected = 0, $name = 'yesno') {
 // ----------------------------------------------------------------------------
 /**
  * DROPDOWN FOR MALE/FEMALE options
- * 
+ *
  * build a dropdown with three options (unselected/male/female)
- * 
+ *
  * @param int $selected - id for selected record
  * @param string $name - the name/id for select form
  * @return void - just echo the html encoded string
@@ -1348,9 +1559,9 @@ function dropdown_sex($selected = 0, $name = 'sex') {
 // ----------------------------------------------------------------------------
 /**
  * DROPDOWN FOR MARITAL STATUS
- * 
+ *
  * build a dropdown with marital status
- * 
+ *
  * @param int $selected - id for selected record
  * @param string $name - the name/id for select form
  * @return void - just echo the html encoded string
@@ -1373,9 +1584,9 @@ function dropdown_marital($selected = 0, $name = 'status') {
 // ----------------------------------------------------------------------------
 /**
  * DROPDOWN FOR PROVIDERS
- * 
+ *
  * build a dropdown with all providers
- * 
+ *
  * @param int $selected - id for selected record
  * @param string $name - the name/id for select form
  * @return void - just echo the html encoded string
@@ -1398,9 +1609,9 @@ function dropdown_providers($selected = 0, $name = 'status') {
 // ----------------------------------------------------------------------------
 /**
  * DROPDOWN FOR INSURANCE COMPANIES
- * 
+ *
  * build a dropdown with all insurers
- * 
+ *
  * @param int $selected - id for selected record
  * @param string $name - the name/id for select form
  * @return void - just echo the html encoded string
@@ -1424,9 +1635,9 @@ function dropdown_insurance($selected = 0, $name = 'iprovider') {
 // ----------------------------------------------------------------------------
 /**
  * COUNTRY CODE
- * 
+ *
  * return the name or the country code, function of arguments
- * 
+ *
  * @param int $country_code
  * @param string $country_name
  * @return string | int - name or code
@@ -1454,37 +1665,74 @@ function DBToDate ($date)
     return $date;
 }
 
-function get_patient_balance($pid) {
-  if ($GLOBALS['oer_config']['ws_accounting']['enabled'] === 2) {
-    $brow = sqlQuery("SELECT SUM(fee) AS amount FROM billing WHERE " .
-      "pid = ? AND activity = 1", array($pid) );
-    $srow = sqlQuery("SELECT SUM(fee) AS amount FROM drug_sales WHERE " .
-      "pid = ?", array($pid) );
-    $drow = sqlQuery("SELECT SUM(pay_amount) AS payments, " .
-      "SUM(adj_amount) AS adjustments FROM ar_activity WHERE " .
-      "pid = ?", array($pid) );
-    return sprintf('%01.2f', $brow['amount'] + $srow['amount']
-      - $drow['payments'] - $drow['adjustments']);
+/**
+ * Get up to 3 insurances (primary, secondary, tertiary) that are effective
+ * for the given patient on the given date.
+ *
+ * @param int     The PID of the patient.
+ * @param string  Date in yyyy-mm-dd format.
+ * @return array  Array of 0-3 insurance_data rows.
+ */
+function getEffectiveInsurances($patient_id, $encdate) {
+  $insarr = array();
+  foreach (array('primary','secondary','tertiary') as $instype) {
+    $tmp = sqlQuery("SELECT * FROM insurance_data " .
+      "WHERE pid = ? AND type = ? " .
+      "AND date <= ? ORDER BY date DESC LIMIT 1",
+      array($patient_id, $instype, $encdate));
+    if (empty($tmp['provider'])) break;
+    $insarr[] = $tmp;
   }
-  else if ($GLOBALS['oer_config']['ws_accounting']['enabled']) {
-    // require_once($GLOBALS['fileroot'] . "/library/classes/WSWrapper.class.php");
-    $conn = $GLOBALS['adodb']['db'];
-    $customer_info['id'] = 0;
-    $sql = "SELECT foreign_id FROM integration_mapping AS im " .
-      "LEFT JOIN patient_data AS pd ON im.local_id = pd.id WHERE " .
-      "pd.pid = '" . $pid . "' AND im.local_table = 'patient_data' AND " .
-      "im.foreign_table = 'customer'";
-    $result = $conn->Execute($sql);
-    if($result && !$result->EOF) {
-      $customer_info['id'] = $result->fields['foreign_id'];
+  return $insarr;
+}
+
+/**
+ * Get the patient's balance due. Normally this excludes amounts that are out
+ * to insurance.  If you want to include what insurance owes, set the second
+ * parameter to true.
+ *
+ * @param int     The PID of the patient.
+ * @param boolean Indicates if amounts owed by insurance are to be included.
+ * @return number The balance.
+ */
+function get_patient_balance($pid, $with_insurance=false) {
+    $balance = 0;
+    $feres = sqlStatement("SELECT date, encounter, last_level_billed, " .
+      "last_level_closed, stmt_count " .
+      "FROM form_encounter WHERE pid = ?", array($pid));
+    while ($ferow = sqlFetchArray($feres)) {
+      $encounter = $ferow['encounter'];
+      $dos = substr($ferow['date'], 0, 10);
+      $insarr = getEffectiveInsurances($pid, $dos);
+      $inscount = count($insarr);
+      if (!$with_insurance && $ferow['last_level_closed'] < $inscount && $ferow['stmt_count'] == 0) {
+        // It's out to insurance so only the co-pay might be due.
+        $brow = sqlQuery("SELECT SUM(fee) AS amount FROM billing WHERE " .
+          "pid = ? AND encounter = ? AND " .
+          "code_type = 'copay' AND activity = 1",
+          array($pid, $encounter));
+        $drow = sqlQuery("SELECT SUM(pay_amount) AS payments " .
+          "FROM ar_activity WHERE " .
+          "pid = ? AND encounter = ? AND payer_type = 0",
+          array($pid, $encounter));
+        $ptbal = $insarr[0]['copay'] + $brow['amount'] - $drow['payments'];
+        if ($ptbal > 0) $balance += $ptbal;
+      }
+      else {
+        // Including insurance or not out to insurance, everything is due.
+        $brow = sqlQuery("SELECT SUM(fee) AS amount FROM billing WHERE " .
+          "pid = ? AND encounter = ? AND " .
+          "activity = 1", array($pid, $encounter));
+        $drow = sqlQuery("SELECT SUM(pay_amount) AS payments, " .
+          "SUM(adj_amount) AS adjustments FROM ar_activity WHERE " .
+          "pid = ? AND encounter = ?", array($pid, $encounter));
+        $srow = sqlQuery("SELECT SUM(fee) AS amount FROM drug_sales WHERE " .
+          "pid = ? AND encounter = ?", array($pid, $encounter));
+        $balance += $brow['amount'] + $srow['amount']
+          - $drow['payments'] - $drow['adjustments'];
+      }
     }
-    $function['ezybiz.customer_balance'] = array(new xmlrpcval($customer_info,"struct"));
-    $ws = new WSWrapper($function);
-    if(is_numeric($ws->value)) {
-      return sprintf('%01.2f', $ws->value);
-    }
-  }
-  return '';
+    return sprintf('%01.2f', $balance);
 }
 
 // Function to check if patient is deceased.

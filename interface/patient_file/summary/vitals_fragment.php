@@ -1,6 +1,6 @@
 <?php
 /*******************************************************************************\
- * Copyright (C) Brady Miller (brady@sparmy.com)                                *
+ * Copyright (C) Brady Miller (brady.g.miller@gmail.com)                                *
  *                                                                              *
  * This program is free software; you can redistribute it and/or                *
  * modify it under the terms of the GNU General Public License                  *
@@ -17,13 +17,7 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.  *
  ********************************************************************************/
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../../globals.php");
 
@@ -36,7 +30,7 @@ $result=sqlQuery("SELECT FORM_VITALS.date, FORM_VITALS.id FROM form_vitals AS FO
     
 if ( !$result ) //If there are no disclosures recorded
 { ?>
-  <span class='text'> <?php echo htmlspecialchars(xl("No vitals have been documented."),ENT_NOQUOTES); 
+  <span class='text'> <?php echo htmlspecialchars(xl("No vitals have been documented."),ENT_NOQUOTES);
 ?>
   </span> 
 <?php 

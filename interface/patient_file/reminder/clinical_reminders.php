@@ -1,6 +1,6 @@
 <?php
 // Copyright (C) 2011 by following authors:
-//   -Brady Miller <brady@sparmy.com>
+//   -Brady Miller <brady.g.miller@gmail.com>
 //   -Ensofttek, LLC
 //
 // This program is free software; you can redistribute it and/or
@@ -8,11 +8,7 @@
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
 
 require_once("../../globals.php");
 require_once("$srcdir/options.inc.php");
@@ -25,12 +21,12 @@ require_once("$srcdir/clinical_rules.php");
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
 <link rel="stylesheet" type="text/css" href="../../../library/js/fancybox/jquery.fancybox-1.2.6.css" media="screen" />
 <style type="text/css">@import url(../../../library/dynarch_calendar.css);</style>
-<script type="text/javascript" src="../../../library/dialog.js"></script>
+<script type="text/javascript" src="../../../library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 <script type="text/javascript" src="../../../library/textformat.js"></script>
 <script type="text/javascript" src="../../../library/dynarch_calendar.js"></script>
 <?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
 <script type="text/javascript" src="../../../library/dynarch_calendar_setup.js"></script>
-<script type="text/javascript" src="../../../library/js/jquery.1.3.2.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-3-2/index.js"></script>
 <script type="text/javascript" src="../../../library/js/common.js"></script>
 <script type="text/javascript" src="../../../library/js/fancybox/jquery.fancybox-1.2.6.js"></script>
 </head>
@@ -43,14 +39,14 @@ $patient_id = ($_GET['patient_id']) ? $_GET['patient_id'] : "";
 <div>
   <span class='title'><?php echo htmlspecialchars( xl('Clinical Reminders'), ENT_NOQUOTES); ?></span>
 </div>
-<div style='float:left;margin-right:10px'>
+<div id='namecontainer_creminders' class='namecontainer_creminders' style='float:left;margin-right:10px'>
   <?php echo htmlspecialchars( xl('for'), ENT_NOQUOTES);?>&nbsp;
   <span class="title">
     <a href="../summary/demographics.php" onclick="top.restoreSession()"><?php echo htmlspecialchars( getPatientName($pid), ENT_NOQUOTES); ?></a>
   </span>
 </div>
 <div>
-  <a href="../summary/demographics.php" <?php if (!$GLOBALS['concurrent_layout']) echo "target='Main'"; ?> class="css_button" onclick="top.restoreSession()">
+  <a href="../summary/demographics.php" class="css_button" onclick="top.restoreSession()">
     <span><?php echo htmlspecialchars( xl('Back To Patient'), ENT_NOQUOTES);?></span>
   </a>
 </div>
@@ -62,25 +58,25 @@ $patient_id = ($_GET['patient_id']) ? $_GET['patient_id'] : "";
 <?php
   // collect the pertinent plans and rules
   $plans_default = resolve_plans_sql('','0',TRUE);
-  $rules_default = resolve_rules_sql('','0',TRUE);
+  $rules_default = resolve_rules_sql('','0',TRUE,'',$_SESSION['authUser']);
 ?>
 
 <ul class="tabNav">
-  <li class='current'><a href='/play/javascript-tabbed-navigation/' onclick='top.restoreSession()'><?php echo htmlspecialchars( xl('Main'), ENT_NOQUOTES); ?></a></li>
-  <li><a href='/play/javascript-tabbed-navigation/' onclick='top.restoreSession()'><?php echo htmlspecialchars( xl('Plans'), ENT_NOQUOTES); ?></a></li>
-  <li><a href='/play/javascript-tabbed-navigation/' onclick='top.restoreSession()'><?php echo htmlspecialchars( xl('Admin'), ENT_NOQUOTES); ?></a></li>
+  <li class='current'><a href='#' onclick='top.restoreSession()'><?php echo htmlspecialchars( xl('Main'), ENT_NOQUOTES); ?></a></li>
+  <li><a href='#' onclick='top.restoreSession()'><?php echo htmlspecialchars( xl('Plans'), ENT_NOQUOTES); ?></a></li>
+  <li><a href='#' onclick='top.restoreSession()'><?php echo htmlspecialchars( xl('Admin'), ENT_NOQUOTES); ?></a></li>
 </ul>
 
 <div class="tabContainer">
   <div class="tab current text" style="height:auto;width:97%;">
     <?php
-      clinical_summary_widget($pid,"reminders-all");
+      clinical_summary_widget($pid,"reminders-all",'','default',$_SESSION['authUser']);
     ?>
   </div>
 
   <div class="tab text" style="height:auto;width:97%;">
     <?php
-      clinical_summary_widget($pid,"reminders-all",'',"plans");
+      clinical_summary_widget($pid,"reminders-all",'',"plans",$_SESSION['authUser']);
     ?>
   </div>
 
@@ -96,11 +92,20 @@ $patient_id = ($_GET['patient_id']) ? $_GET['patient_id'] : "";
           <th style="left-margin:1em;"><?php echo htmlspecialchars( xl('Practice Default Setting'), ENT_NOQUOTES); ?></th>
         </tr>
         <?php foreach ($plans_default as $plan) { ?>
+          <?php
+          //only show the plan if there are any rules in it that the user has access to
+          $plan_check = resolve_rules_sql('','0',TRUE,$plan['id'],$_SESSION['authUser']);
+          if (empty($plan_check)) {
+            continue;
+          }
+          ?>
           <tr>
             <td style="border-right:1px solid black;"><?php echo generate_display_field(array('data_type'=>'1','list_id'=>'clinical_plans'), $plan['id']); ?></td>
             <td align="center">
               <?php
+
               $patient_plan = collect_plan($plan['id'],$patient_id);
+
               // Set the patient specific setting for gui
               if (empty($patient_plan)) {
                 $select = "default";

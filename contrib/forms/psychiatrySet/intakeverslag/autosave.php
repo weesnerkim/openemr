@@ -17,7 +17,7 @@ include_once("$srcdir/forms.inc");
 // escape the strings
 foreach ($_POST as $k => $var)
 {
-  $_POST[$k] = mysql_real_escape_string($var);
+  $_POST[$k] = add_escape_custom($var);
   // echo "$var\n";
 }
 
@@ -66,7 +66,7 @@ if( $vectAutosave['autosave_flag'] == 1 || $_POST["mode"] == "update" )
   sqlQuery( $strSql );
 
 //echo "lalalalal id=$newid, sql=$strSql<br>";
-                  
+
 } else
 {
     $newid = formSubmit( "form_intakeverslag", $_POST, $_GET["id"], $userauthorized );

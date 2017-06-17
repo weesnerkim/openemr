@@ -1,25 +1,26 @@
 <?php
 
-require_once ($GLOBALS['fileroot'] . "/library/classes/Controller.class.php");
 require_once ($GLOBALS['fileroot'] . "/library/forms.inc");
 require_once ($GLOBALS['fileroot'] . "/library/patient.inc");
 require_once("FormVitals.class.php");
 
 class C_FormVitals extends Controller {
 
-	var $template_dir;
+    var $template_dir;
+    var $form_id;
 
-    function C_FormVitals($template_mod = "general") {
-    	parent::Controller();
-    	$returnurl = $GLOBALS['concurrent_layout'] ? 'encounter_top.php' : 'patient_encounter.php';
+    function __construct($template_mod = "general") {
+    	parent::__construct();
+    	$returnurl = 'encounter_top.php';
     	$this->template_mod = $template_mod;
     	$this->template_dir = dirname(__FILE__) . "/templates/vitals/";
     	$this->assign("FORM_ACTION", $GLOBALS['web_root']);
     	$this->assign("DONT_SAVE_LINK",$GLOBALS['webroot'] . "/interface/patient_file/encounter/$returnurl");
     	$this->assign("STYLE", $GLOBALS['style']);
 
-        // send the unit selection
-        $this->assign("units_of_measurement",$GLOBALS['units_of_measurement']);
+      // Options for units of measurement and things to omit.
+      $this->assign("units_of_measurement",$GLOBALS['units_of_measurement']);
+      $this->assign("gbl_vitals_options",$GLOBALS['gbl_vitals_options']);
     }
 
     function default_action_old() {
@@ -31,7 +32,13 @@ class C_FormVitals extends Controller {
     	return $this->fetch($this->template_dir . $this->template_mod . "_new.html");
 	}
 
-    function default_action($form_id) {
+    function setFormId($form_id){
+        $this->form_id = $form_id;
+    }
+
+    function default_action() {
+
+        $form_id = $this->form_id;
 
         if (is_numeric($form_id)) {
     		$vitals = new FormVitals($form_id);
@@ -42,22 +49,27 @@ class C_FormVitals extends Controller {
 
     	$dbconn = $GLOBALS['adodb']['db'];
     	//Combined query for retrieval of vital information which is not deleted
-    	$sql = "SELECT form_vitals.* from form_vitals,forms where form_vitals.id != $form_id and form_vitals.pid =". $GLOBALS['pid'];
-    	$sql .=" and forms.deleted!=1 and form_vitals.id=forms.form_id";
-        $sql .= " ORDER BY form_vitals.date DESC";
+      $sql = "SELECT fv.*, fe.date AS encdate " .
+        "FROM form_vitals AS fv, forms AS f, form_encounter AS fe WHERE " .
+        "fv.id != $form_id and fv.pid = " . $GLOBALS['pid'] . " AND " .
+        "f.formdir = 'vitals' AND f.deleted = 0 AND f.form_id = fv.id AND " .
+        "fe.pid = f.pid AND fe.encounter = f.encounter " .
+        "ORDER BY encdate DESC, fv.date DESC";
     	$result = $dbconn->Execute($sql);
 
         // get the patient's current age
     	$patient_data = getPatientData($GLOBALS['pid']);
-        $patient_age = getPatientAge($patient_data['DOB']);
+        $patient_dob=$patient_data['DOB'];
+        $patient_age = getPatientAge($patient_dob);
     	$this->assign("patient_age", $patient_age);
+        $this->assign("patient_dob",$patient_dob);
 
     	$i = 1;
     	while($result && !$result->EOF)
     	{
-    		
     		$results[$i]['id'] = $result->fields['id'];
-    		$results[$i]['date'] = $result->fields['date'];
+    		$results[$i]['encdate'] = substr($result->fields['encdate'], 0, 10);
+        $results[$i]['date'] = $result->fields['date'];
     		$results[$i]['activity'] = $result->fields['activity'];
     		$results[$i]['bps'] = $result->fields['bps'];
     		$results[$i]['bpd'] = $result->fields['bpd'];
@@ -83,7 +95,7 @@ class C_FormVitals extends Controller {
 	return $this->fetch($this->template_dir . $this->template_mod . "_new.html");
 
     }
-	
+
     function default_action_process() {
 		if ($_POST['process'] != "true")
 			return;
@@ -106,9 +118,9 @@ class C_FormVitals extends Controller {
 		}
 
 		$this->vitals = new FormVitals($_POST['id']);
-		
+
 		parent::populate_object($this->vitals);
-		
+
 		$this->vitals->persist();
 		if ($GLOBALS['encounter'] < 1) {
 			$GLOBALS['encounter'] = date("Ymd");

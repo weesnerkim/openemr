@@ -1,6 +1,5 @@
 <?php
 
-require_once(dirname(__FILE__) . "/../../../library/classes/ORDataObject.class.php");
 
 define("EVENT_VEHICLE",1);
 define("EVENT_WORK_RELATED",2);
@@ -51,27 +50,27 @@ class FormVitals extends ORDataObject {
 	 * Constructor sets all Form attributes to their default value
 	 */
 
-	function FormVitals($id= "", $_prefix = "")	{
+	function __construct($id= "", $_prefix = "")	{
 		if ($id > 0) {
 			$this->id = $id;
-			
+
 		}
 		else {
 			$id = "";
-			$this->date = $this->get_date();	
+			$this->date = $this->get_date();
 		}
-		
+
 		$this->_table = "form_vitals";
 		$this->activity = 1;
 		$this->pid = $GLOBALS['pid'];
 		if ($id != "") {
 			$this->populate();
-			
+
 		}
 	}
 	function populate() {
 		parent::populate();
-		//$this->temp_methods = parent::_load_enum("temp_locations",false);		
+		//$this->temp_methods = parent::_load_enum("temp_locations",false);
 	}
 
 	function toString($html = false) {
@@ -109,20 +108,24 @@ class FormVitals extends ORDataObject {
 	function get_activity() {
 		return $this->activity;
 	}
-	
-	function get_date() {
-		
-	if(!$this->date){			
-    	        $this->date = date('YmdHis', time());
-	}
-		return $this->date;
-		
-	}
-	function set_date($dt) {
-		if (!empty($dt)) {
-			$this->date = $dt;
-		}
-	}
+
+  function get_date() {
+    if(!$this->date){
+      $this->date = date('YmdHis', time());
+    }
+    return $this->date;
+  }
+
+  function set_date($dt) {
+    if (!empty($dt)) {
+      $dt = str_replace('-', '', $dt);
+      $dt = str_replace(':', '', $dt);
+      $dt = str_replace(' ', '', $dt);
+      while (strlen($dt) < 14) $dt .= '0';
+      $this->date = $dt;
+    }
+  }
+
 	function get_user() {
 		return $this->user;
 	}
@@ -155,6 +158,21 @@ class FormVitals extends ORDataObject {
 			$this->weight = $w;
 		}
 	}
+        function display_weight($pounds)
+        {
+            if($pounds!=0)
+            {
+                if($GLOBALS['us_weight_format']==2)
+                {
+                    $pounds_int=floor($pounds);
+                    return $pounds_int." ".xl('lb') ." " .round(($pounds-$pounds_int)*16)." ".xl('oz');
+                }
+                else
+                {
+                    return $pounds;
+                }
+            }
+        }
 	function get_height() {
 		return $this->height;
 	}

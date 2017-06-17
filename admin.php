@@ -6,15 +6,27 @@
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
+// Checks if the server's PHP version is compatible with OpenEMR:
+require_once(dirname(__FILE__) . "/common/compatibility/Checker.php");
+
+$response = OpenEMR\Checker::checkPhpVersion();
+if ($response !== true) {
+  die($response);
+}
+
 require_once "version.php";
+
+// Please note that the plain sql is used over the Doctrine ORM for
+// `version` table interactions because it cannot connect due to a
+// lack of context (this code is ran outside of the OpenEMR context).
 
 $webserver_root = dirname(__FILE__);
 if (stripos(PHP_OS,'WIN') === 0)
-  $webserver_root = str_replace("\\","/",$webserver_root); 
+  $webserver_root = str_replace("\\","/",$webserver_root);
 $OE_SITES_BASE = "$webserver_root/sites";
 
-function sqlQuery($statement) {
-  $row = @mysql_fetch_array(mysql_query($statement), MYSQL_ASSOC);
+function sqlQuery($statement, $link) {
+  $row = mysqli_fetch_array(mysqli_query($link, $statement), MYSQLI_ASSOC);
   return $row;
 }
 ?>
@@ -68,11 +80,9 @@ foreach ($siteslist as $sfname) {
   include "$sitedir/sqlconf.php";
 
   if ($config) {
-    $dbh = mysql_connect("$host:$port", "$login", "$pass");
-    if ($dbh === FALSE)
+    $dbh = mysqli_connect("$host", "$login", "$pass", $dbase, $port);
+    if (!$dbh)
       $errmsg = "MySQL connect failed";
-    else if (!mysql_select_db($dbase, $dbh))
-      $errmsg = "Access to database failed";
   }
 
   echo "  <td>$sfname</td>\n";
@@ -86,17 +96,17 @@ foreach ($siteslist as $sfname) {
   }
   else {
     // Get site name for display.
-    $row = sqlQuery("SELECT gl_value FROM globals WHERE gl_name = 'openemr_name' LIMIT 1");
+    $row = sqlQuery("SELECT gl_value FROM globals WHERE gl_name = 'openemr_name' LIMIT 1", $dbh);
     $openemr_name = $row ? $row['gl_value'] : '';
 
     // Get version indicators from the database.
-    $row = sqlQuery("SHOW TABLES LIKE 'version'");
+    $row = sqlQuery("SHOW TABLES LIKE 'version'", $dbh);
     if (empty($row)) {
       $openemr_version = 'Unknown';
       $database_version = 0;
     }
     else {
-      $row = sqlQuery("SELECT * FROM version LIMIT 1");
+      $row = sqlQuery("SELECT * FROM version LIMIT 1", $dbh);
       $database_patch_txt = "";
       if ( !(empty($row['v_realpatch'])) && $row['v_realpatch'] != 0 ) {
         $database_patch_txt = " (" . $row['v_realpatch'] .")";
@@ -104,6 +114,7 @@ foreach ($siteslist as $sfname) {
       $openemr_version = $row['v_major'] . "." . $row['v_minor'] . "." .
         $row['v_patch'] . $row['v_tag'] . $database_patch_txt;
       $database_version = 0 + $row['v_database'];
+      $database_acl = 0 + $row['v_acl'];
       $database_patch = 0 + $row['v_realpatch'];
     }
 
@@ -113,16 +124,19 @@ foreach ($siteslist as $sfname) {
     if ($v_database != $database_version) {
       echo "  <td><a href='sql_upgrade.php?site=$sfname'>Upgrade Database</a></td>\n";
     }
+    else if ( ($v_acl > $database_acl) ) {
+      echo "  <td><a href='acl_upgrade.php?site=$sfname'>Upgrade Access Controls</a></td>\n";
+    }
     else if ( ($v_realpatch != $database_patch) ) {
       echo "  <td><a href='sql_patch.php?site=$sfname'>Patch Database</a></td>\n";
     }
     else {
-      echo "  <td><a href='interface/login/login_frame.php?site=$sfname'>Log In</a></td>\n";
+      echo "  <td><a href='interface/login/login.php?site=$sfname'>Log In</a></td>\n";
     }
   }
   echo " </tr>\n";
 
-  if ($config && $dbh !== FALSE) mysql_close($dbh);
+  if ($config && $dbh !== FALSE) mysqli_close($dbh);
 }
 ?>
 </table>

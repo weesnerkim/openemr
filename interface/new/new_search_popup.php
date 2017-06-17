@@ -7,17 +7,10 @@
 // as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 
-//SANITIZE ALL ESCAPES
-$sanitize_all_escapes=true;
-//
 
-//STOP FAKE REGISTER GLOBALS
-$fake_register_globals=false;
-//
 
 require_once("../globals.php");
 require_once("$srcdir/patient.inc");
-require_once("$srcdir/formdata.inc.php");
 
 $fstart = $_REQUEST['fstart'] + 0;
 
@@ -27,6 +20,7 @@ $searchcolor = empty($GLOBALS['layout_search_color']) ?
 <html>
 <head>
 <?php html_header_show();?>
+<script type="text/javascript" src="<?php echo $webroot ?>/interface/main/tabs/js/include_opener.js"></script>    
 
 <link rel=stylesheet href="<?php echo $css_header;?>" type="text/css">
 <style>
@@ -94,7 +88,7 @@ form {
 }
 </style>
 
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery-1.2.2.min.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
 
 <script language="JavaScript">
 
@@ -147,7 +141,6 @@ foreach ($_REQUEST as $key => $value) {
     array_push($sqlBindArray, $value);
   }
   $where .= " OR ".add_escape_custom($fldname)." LIKE ?";
-  array_push($sqlBindArray, $value);
   array_push($sqlBindArraySpecial, $value);
   echo "<input type='hidden' name='".htmlspecialchars( $key, ENT_QUOTES)."' value='".htmlspecialchars( $value, ENT_QUOTES)."' />\n";
   ++$numfields;
@@ -159,6 +152,7 @@ $sql = "SELECT *, ( $relevance ) AS relevance, " .
   "ORDER BY relevance DESC, lname, fname, mname " .
   "LIMIT ".add_escape_custom($fstart).", ".add_escape_custom($MAXSHOW)."";
 
+$sqlBindArray = array_merge($sqlBindArray, $sqlBindArraySpecial);
 $rez = sqlStatement($sql, $sqlBindArray);
 $result = array();
 while ($row = sqlFetchArray($rez)) $result[] = $row;
@@ -274,17 +268,11 @@ $(document).ready(function() {
 
 var SelectPatient = function (eObj) {
 <?php 
-// For the old layout we load a frameset that also sets up the new pid.
-// The new layout loads just the demographics frame here, which in turn
+// The layout loads just the demographics frame here, which in turn
 // will set the pid and load all the other frames.
-if ($GLOBALS['concurrent_layout']) {
   $newPage = "../patient_file/summary/demographics.php?set_pid=";
   $target = "document";
-}
-else {
-  $newPage = "../patient_file/patient_file.php?set_pid=";
-  $target = "top";
-}
+
 ?>
   objID = eObj.id;
   var parts = objID.split("~");
@@ -302,11 +290,7 @@ f.create.value = '<?php echo htmlspecialchars( xl('Confirm Create New Patient'),
 <?php } ?>
 
 <?php if (!count($result)) { ?>
-if (confirm('<?php echo htmlspecialchars( xl('No matches were found. Create the new patient now?'), ENT_QUOTES); ?>')) {
- opener.top.restoreSession();
- f.submit();
-}
-window.close();
+$("<td><?php echo htmlspecialchars( xl('No matches were found.'), ENT_QUOTES); ?></td>").appendTo("#searchResults tr");
 <?php } ?>
 
 </script>

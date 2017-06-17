@@ -56,7 +56,7 @@ if ($_GET['mode']) {
 }
 else
 {
- $returnurl = $GLOBALS['concurrent_layout'] ? 'encounter_top.php' : 'patient_encounter.php';
+ $returnurl = 'encounter_top.php';
 }
 
 ]]></xsl:text>
@@ -77,10 +77,10 @@ else
 
 <!-- supporting javascript code -->
 <!-- for dialog -->
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot']; ?>/library/dialog.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['webroot']; ?>/library/dialog.js?v=<?php echo $v_js_includes; ?>"></script>
 <!-- For jquery, required by the save, discard, and print buttons. -->
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot']; ?>/library/js/jquery.js"></script>
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot']; ?>/library/textformat.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-3-1-1/index.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['webroot']; ?>/library/textformat.js?v=<?php echo $v_js_includes; ?>"></script>
 
 <!-- Global Stylesheet -->
 <link rel="stylesheet" href="<?php echo $css_header; ?>" type="text/css"/>
@@ -90,10 +90,8 @@ else
 ]]></xsl:text>
 <xsl:if test="//field[@type='date']">
 <xsl:text disable-output-escaping="yes"><![CDATA[<!-- supporting code for the pop up calendar(date picker) -->
-<style type="text/css">@import url(<?php echo $GLOBALS['webroot']; ?>/library/dynarch_calendar.css);</style>
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot']; ?>/library/dynarch_calendar.js"></script>
-<?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot']; ?>/library/dynarch_calendar_setup.js"></script>
+<link rel="stylesheet" href="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-datetimepicker-2-5-4/build/jquery.datetimepicker.min.css">
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-datetimepicker-2-5-4/build/jquery.datetimepicker.full.min.js"></script>
 ]]></xsl:text>
 </xsl:if>
 <xsl:if test="//field[@type='time']">
@@ -106,17 +104,6 @@ else
 <script type="text/javascript">
 // this line is to assist the calendar text boxes
 var mypcc = '<?php echo $GLOBALS['phone_country_code']; ?>';
-
-<!-- support code for collapsing sections -->
-function divclick(cb, divid) {
- var divstyle = document.getElementById(divid).style;
- if (cb.checked) {
-  divstyle.display = 'block';
- } else {
-  divstyle.display = 'none';
- }
- return true;
-}
 
 <!-- FIXME: this needs to detect access method, and construct a URL appropriately! -->
 function PrintForm() {
@@ -136,7 +123,7 @@ function PrintForm() {
 </a>
 </div>
 
-<form method="post" action="<?php echo $submiturl; ?>" id="<?php echo $form_folder; ?>"> 
+<form method="post" action="<?php echo $submiturl; ?>" id="<?php echo $form_folder; ?>">
 
 <!-- Save/Cancel buttons -->
 <div id="top_buttons" class="top_buttons">
@@ -173,6 +160,33 @@ $(document).ready(function(){
     $(".save").click(function() { top.restoreSession(); document.forms["<?php echo $form_folder; ?>"].submit(); });
     $(".dontsave").click(function() { location.href='<?php echo $returnurl; ?>'; });
     $(".print").click(function() { PrintForm(); });
+
+    $(".sectionlabel input").click( function() {
+    	var section = $(this).attr("data-section");
+		if ( $(this).attr('checked' ) ) {
+			$("#"+section).show();
+		} else {
+			$("#"+section).hide();
+		}
+    });
+
+    $(".sectionlabel input").attr( 'checked', 'checked' );
+    $(".section").show();
+
+    $('.datepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = false; ?>
+        <?php $datetimepicker_showseconds = false; ?>
+        <?php $datetimepicker_formatInput = false; ?>
+        <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+        <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+    });
+    $('.datetimepicker').datetimepicker({
+        <?php $datetimepicker_timepicker = true; ?>
+        <?php $datetimepicker_showseconds = false; ?>
+        <?php $datetimepicker_formatInput = false; ?>
+        <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+        <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+    });
 });
 </script>
 </body>

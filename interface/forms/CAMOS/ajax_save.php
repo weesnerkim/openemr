@@ -3,13 +3,11 @@
 include_once("../../globals.php");
 include_once("../../../library/api.inc");
 include_once("../../../library/forms.inc");
-include_once("../../../library/sql.inc");
 include_once("content_parser.php");
-include_once("../../../library/formdata.inc.php");
 
 $field_names = array('category' => formData("category"), 'subcategory' => formData("subcategory"), 'item' => formData("item"), 'content' => strip_escape_custom($_POST['content']));
 $camos_array = array();
-process_commands($field_names['content'],$camos_array); 
+process_commands($field_names['content'],$camos_array);
 
 $CAMOS_form_name = "CAMOS-".$field_names['category'].'-'.$field_names['subcategory'].'-'.$field_names['item'];
 
@@ -38,7 +36,7 @@ foreach($camos_array as $val) {
       //   views to support notes within database that still contain placeholders (ie. notes that were created previous to
       //   version 4.0).
       $val[$k] = trim( add_escape_custom( replace($pid,$encounter,$v) ) );
-    } 
+    }
     $CAMOS_form_name = "CAMOS-".$val['category'].'-'.$val['subcategory'].'-'.$val['item'];
     reset($val);
     $newid = formSubmit("form_CAMOS", $val, $_GET["id"], $userauthorized);

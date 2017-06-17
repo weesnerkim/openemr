@@ -4,6 +4,10 @@
 Copyright (c) 2003-2011, CKSource - Frederico Knabben. All rights reserved.
 For licensing, see LICENSE.html or http://ckeditor.com/license
 */
+
+//exit since there is a known vulnerability in this script
+exit();
+
 ?>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
@@ -32,10 +36,7 @@ else
 
 foreach ( $postArray as $sForm => $value )
 {
-	if ( get_magic_quotes_gpc() )
-		$postedValue = htmlspecialchars( stripslashes( $value ) ) ;
-	else
-		$postedValue = htmlspecialchars( $value ) ;
+    $postedValue = htmlspecialchars( $value ) ;
 
 ?>
 		<tr>

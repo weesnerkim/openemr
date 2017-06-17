@@ -1,33 +1,52 @@
 <?php
- // Copyright (C) 2005-2010 Rod Roark <rod@sunsetsystems.com>
- //
- // This program is free software; you can redistribute it and/or
- // modify it under the terms of the GNU General Public License
- // as published by the Free Software Foundation; either version 2
- // of the License, or (at your option) any later version.
+/*
+ * This report cross-references appointments with encounters.
+ * For a given date, show a line for each appointment with the
+ * matching encounter, and also for each encounter that has no
+ * matching appointment.  This helps to catch these errors:
+ *
+ * * Appointments with no encounter
+ * * Encounters with no appointment
+ * * Codes not justified
+ * * Codes not authorized
+ * * Procedure codes without a fee
+ * * Fees assigned to diagnoses (instead of procedures)
+ * * Encounters not billed
+ *
+ * For decent performance the following indexes are highly recommended:
+ *   openemr_postcalendar_events.pc_eventDate
+ *   forms.encounter
+ *   billing.pid_encounter
+ *
+ *
+ * Copyright (C) 2005-2016 Rod Roark <rod@sunsetsystems.com>
+ * Copyright (C) 2017 Brady Miller <brady.g.miller@gmail.com>
+ *
+ * LICENSE: This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 3
+ * of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <http://opensource.org/licenses/gpl-license.php>;.
+ *
+ * @package OpenEMR
+ * @author Rod Roark <rod@sunsetsystems.com>
+ * @author Brady Miller <brady.g.miller@gmail.com>
+ * @link http://www.open-emr.org
+ *
+ */
 
- // This report cross-references appointments with encounters.
- // For a given date, show a line for each appointment with the
- // matching encounter, and also for each encounter that has no
- // matching appointment.  This helps to catch these errors:
- //
- // * Appointments with no encounter
- // * Encounters with no appointment
- // * Codes not justified
- // * Codes not authorized
- // * Procedure codes without a fee
- // * Fees assigned to diagnoses (instead of procedures)
- // * Encounters not billed
- //
- // For decent performance the following indexes are highly recommended:
- //   openemr_postcalendar_events.pc_eventDate
- //   forms.encounter
- //   billing.pid_encounter
-
+use OpenEMR\Core\Header;
 require_once("../globals.php");
 require_once("$srcdir/patient.inc");
-require_once("$srcdir/formatting.inc.php");
 require_once("../../custom/code_types.inc.php");
+require_once("$srcdir/billing.inc");
+
+$facilityService = new \services\FacilityService();
 
  $errmsg  = "";
  $alertmsg = ''; // not used yet but maybe later
@@ -94,8 +113,8 @@ function postError($msg) {
    "CONCAT( u.lname, ', ', u.fname ) AS docname " .
    "FROM openemr_postcalendar_events AS e " .
    "LEFT OUTER JOIN form_encounter AS fe " .
-   "ON LEFT(fe.date, 10) = e.pc_eventDate AND fe.pid = e.pc_pid " .
-   "LEFT OUTER JOIN forms AS f ON f.encounter = fe.encounter AND f.formdir = 'newpatient' " .
+   "ON fe.date = e.pc_eventDate AND fe.pid = e.pc_pid " .
+   "LEFT OUTER JOIN forms AS f ON f.pid = fe.pid AND f.encounter = fe.encounter AND f.formdir = 'newpatient' " .
    "LEFT OUTER JOIN patient_data AS p ON p.pid = e.pc_pid " .
    // "LEFT OUTER JOIN users AS u ON BINARY u.username = BINARY f.user WHERE ";
    "LEFT OUTER JOIN users AS u ON u.id = fe.provider_id WHERE ";
@@ -105,7 +124,7 @@ function postError($msg) {
    $query .= "e.pc_eventDate = '$form_from_date' ";
   }
   if ($form_facility !== '') {
-   $query .= "AND e.pc_facility = '$form_facility' ";
+   $query .= "AND e.pc_facility = '" . add_escape_custom($form_facility) . "' ";
   }
   // $query .= "AND ( e.pc_catid = 5 OR e.pc_catid = 9 OR e.pc_catid = 10 ) " .
   $query .= "AND e.pc_pid != '' AND e.pc_apptstatus != '?' " .
@@ -118,10 +137,10 @@ function postError($msg) {
    "CONCAT( u.lname, ', ', u.fname ) AS docname " .
    "FROM form_encounter AS fe " .
    "LEFT OUTER JOIN openemr_postcalendar_events AS e " .
-   "ON LEFT(fe.date, 10) = e.pc_eventDate AND fe.pid = e.pc_pid AND " .
+   "ON fe.date = e.pc_eventDate AND fe.pid = e.pc_pid AND " .
    // "( e.pc_catid = 5 OR e.pc_catid = 9 OR e.pc_catid = 10 ) " .
    "e.pc_pid != '' AND e.pc_apptstatus != '?' " .
-   "LEFT OUTER JOIN forms AS f ON f.encounter = fe.encounter AND f.formdir = 'newpatient' " .
+   "LEFT OUTER JOIN forms AS f ON f.pid = fe.pid AND f.encounter = fe.encounter AND f.formdir = 'newpatient' " .
    "LEFT OUTER JOIN patient_data AS p ON p.pid = fe.pid " .
    // "LEFT OUTER JOIN users AS u ON BINARY u.username = BINARY f.user WHERE ";
    "LEFT OUTER JOIN users AS u ON u.id = fe.provider_id WHERE ";
@@ -133,17 +152,18 @@ function postError($msg) {
    $query .= "fe.date >= '$form_from_date 00:00:00' AND fe.date <= '$form_from_date 23:59:59' ";
   }
   if ($form_facility !== '') {
-   $query .= "AND fe.facility_id = '$form_facility' ";
+   $query .= "AND fe.facility_id = '" . add_escape_custom($form_facility) . "' ";
   }
-  $query .= ") ORDER BY docname, pc_eventDate, pc_startTime";
+  $query .= ") ORDER BY docname, IFNULL(pc_eventDate, encdate), pc_startTime";
 
   $res = sqlStatement($query);
  }
 ?>
 <html>
 <head>
-<?php html_header_show();?>
-<link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
+
+<?php Header::setupHeader(['datetime-picker', 'report-helper']); ?>
+
 <style type="text/css">
 
 /* specifically include & exclude from printing */
@@ -171,6 +191,25 @@ function postError($msg) {
 
 </style>
 <title><?php  xl('Appointments and Encounters','e'); ?></title>
+
+<script LANGUAGE="JavaScript">
+
+$(document).ready(function() {
+  oeFixedHeaderSetup(document.getElementById('mymaintable'));
+  var win = top.printLogSetup ? top : opener.top;
+  win.printLogSetup(document.getElementById('printbutton'));
+
+  $('.datepicker').datetimepicker({
+    <?php $datetimepicker_timepicker = false; ?>
+    <?php $datetimepicker_showseconds = false; ?>
+    <?php $datetimepicker_formatInput = false; ?>
+    <?php require($GLOBALS['srcdir'] . '/js/xl/jquery-datetimepicker-2-5-4.js.php'); ?>
+    <?php // can add any additional javascript settings to datetimepicker here; need to prepend first setting with a comma ?>
+  });
+});
+
+</script>
+
 </head>
 
 <body class="body_top">
@@ -181,7 +220,7 @@ function postError($msg) {
 <?php echo date("d F Y", strtotime($form_from_date)) ." &nbsp; to &nbsp; ". date("d F Y", strtotime($form_to_date)); ?>
 </div>
 
-<form method='post' id='theform' action='appt_encounter_report.php'>
+<form method='post' id='theform' action='appt_encounter_report.php' onsubmit='return top.restoreSession()'>
 
 <div id="report_parameters">
 
@@ -192,18 +231,17 @@ function postError($msg) {
 
 	<table class='text'>
 		<tr>
-			<td class='label'>
+			<td class='control-label'>
 				<?php xl('Facility','e'); ?>:
 			</td>
 			<td>
 				<?php
 				 // Build a drop-down list of facilities.
 				 //
-				 $query = "SELECT id, name FROM facility ORDER BY name";
-				 $fres = sqlStatement($query);
-				 echo "   <select name='form_facility'>\n";
-				 echo "    <option value=''>-- " . xl('All Facilities', 'e') . " --\n";
-				 while ($frow = sqlFetchArray($fres)) {
+         $fres = $facilityService->getAll();
+				 echo "   <select name='form_facility' class='form-control'>\n";
+				 echo "    <option value=''>-- " . xl('All Facilities') . " --\n";
+         foreach ($fres as $frow) {
 				  $facid = $frow['id'];
 				  echo "    <option value='$facid'";
 				  if ($facid == $form_facility) echo " selected";
@@ -215,32 +253,26 @@ function postError($msg) {
 				 echo "   </select>\n";
 				?>
 			</td>
-			<td class='label'>
+			<td class='control-label'>
 			   <?php xl('DOS','e'); ?>:
 			</td>
 			<td>
-			   <input type='text' name='form_from_date' id="form_from_date" size='10' value='<?php  echo $form_from_date; ?>'
-				title='Date of appointments mm/dd/yyyy' >
-			   <img src='../pic/show_calendar.gif' align='absbottom' width='24' height='22'
-				id='img_from_date' border='0' alt='[?]' style='cursor:pointer'
-				title='<?php xl('Click here to choose a date','e'); ?>'>
+			   <input type='text' class='datepicker form-control' name='form_from_date' id="form_from_date" size='10' value='<?php  echo $form_from_date; ?>' >
 			</td>
-			<td class='label'>
+			<td class='control-label'>
 			   <?php xl('To','e'); ?>:
 			</td>
 			<td>
-			   <input type='text' name='form_to_date' id="form_to_date" size='10' value='<?php  echo $form_to_date; ?>'
-				title='Optional end date mm/dd/yyyy' >
-			   <img src='../pic/show_calendar.gif' align='absbottom' width='24' height='22'
-				id='img_to_date' border='0' alt='[?]' style='cursor:pointer'
-				title='<?php xl('Click here to choose a date','e'); ?>'>
+			   <input type='text' class='datepicker form-control' name='form_to_date' id="form_to_date" size='10' value='<?php  echo $form_to_date; ?>' >
 			</td>
 		</tr>
 		<tr>
 			<td>&nbsp;</td>
 			<td>
-			   <input type='checkbox' name='form_details'
-				value='1'<?php if ($_POST['form_details']) echo " checked"; ?>><?php xl('Details','e') ?>
+        <div class="checkbox">
+			    <label><input type='checkbox' name='form_details'
+				  value='1'<?php if ($_POST['form_details']) echo " checked"; ?>><?php xl('Details','e') ?></label>
+        </div>
 			</td>
 		</tr>
 	</table>
@@ -252,20 +284,17 @@ function postError($msg) {
 	<table style='border-left:1px solid; width:100%; height:100%' >
 		<tr>
 			<td>
-				<div style='margin-left:15px'>
-					<a href='#' class='css_button' onclick='$("#form_refresh").attr("value","true"); $("#theform").submit();'>
-					<span>
-						<?php xl('Submit','e'); ?>
-					</span>
+				<div class="text-center">
+          <div class="btn-group" role="group">
+					<a href='#' class='btn btn-default btn-save' onclick='$("#form_refresh").attr("value","true"); $("#theform").submit();'>
+						<?php echo xlt('Submit'); ?>
 					</a>
-
 					<?php if ($_POST['form_refresh']) { ?>
-					<a href='#' class='css_button' onclick='window.print()'>
-						<span>
-							<?php xl('Print','e'); ?>
-						</span>
-					</a>
+					  <a href='#' class='btn btn-default btn-print' id='printbutton'>
+							<?php echo xlt('Print'); ?>
+					  </a>
 					<?php } ?>
+          </div>
 				</div>
 			</td>
 		</tr>
@@ -280,7 +309,7 @@ function postError($msg) {
  if ($_POST['form_refresh'] ) {
 ?>
 <div id="report_results">
-<table>
+<table id='mymaintable'>
 
  <thead>
   <th> &nbsp;<?php  xl('Practitioner','e'); ?> </th>
@@ -330,10 +359,7 @@ function postError($msg) {
     if ($code_types[$code_type]['just']) {
      if (! $brow['justify']) postError(xl('Needs Justify'));
     }
-    if ($code_type == 'COPAY') {
-     $copays -= $brow['fee'];
-     if ($brow['fee'] >= 0) postError(xl('Copay not positive'));
-    } else if ($code_types[$code_type]['fee']) {
+    if ($code_types[$code_type]['fee']) {
      $charges += $brow['fee'];
      if ($brow['fee'] == 0 && !$GLOBALS['ippf_specific']) postError(xl('Missing Fee'));
     } else {
@@ -364,6 +390,8 @@ function postError($msg) {
     } // End IPPF stuff
 
    } // end while
+
+   $copays -= getPatientCopay($patient_id,$encounter);
 
    // The following is removed, perhaps temporarily, because gcac reporting
    // no longer depends on gcac issues.  -- Rod 2009-08-11
@@ -501,17 +529,5 @@ function postError($msg) {
 <?php if ($alertmsg) { echo " alert('$alertmsg');\n"; } ?>
 </script>
 </body>
-
-<!-- stuff for the popup calendar -->
-<style type="text/css">@import url(../../library/dynarch_calendar.css);</style>
-<script type="text/javascript" src="../../library/dynarch_calendar.js"></script>
-<?php include_once("{$GLOBALS['srcdir']}/dynarch_calendar_en.inc.php"); ?>
-<script type="text/javascript" src="../../library/dynarch_calendar_setup.js"></script>
-<script type="text/javascript" src="../../library/js/jquery.1.3.2.js"></script>
-
-<script language="Javascript">
- Calendar.setup({inputField:"form_from_date", ifFormat:"%Y-%m-%d", button:"img_from_date"});
- Calendar.setup({inputField:"form_to_date", ifFormat:"%Y-%m-%d", button:"img_to_date"});
-</script>
 
 </html>

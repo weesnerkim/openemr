@@ -6,7 +6,6 @@
 
 include_once("../../globals.php");
 include_once("../../../custom/code_types.inc.php");
-include_once("$srcdir/sql.inc");
 
 //the maximum number of records to pull out with the search:
 $M = 30;
@@ -23,7 +22,7 @@ $code_type = $_GET['type'];
 <link rel="stylesheet" href="<?php echo $css_header;?>" type="text/css">
 
 <!-- add jQuery support -->
-<script type="text/javascript" src="<?php echo $GLOBALS['webroot'] ?>/library/js/jquery-1.2.2.min.js"></script>
+<script type="text/javascript" src="<?php echo $GLOBALS['assets_static_relative']; ?>/jquery-min-1-2-2/index.js"></script>
 
 </head>
 <body class="body_bottom">
@@ -99,7 +98,7 @@ if ($result) {
             echo "</td><td valign='top'>\n";
             $count = 0;
         }
-   
+
         echo "<div class='oneresult' style='padding: 3px 0px 3px 0px;'>";
         echo "<a target='".xl('Diagnosis')."' href='diagnosis.php?mode=add" .
             "&type="     . urlencode($code_type) .
@@ -114,10 +113,10 @@ if ($result) {
             "</b>" . " " . strtolower($iter{"code_text"}));
         echo "</a><br>\n";
         echo "</div>";
-    
+
         $count++;
         $total++;
-        
+
         if ($total == $M) {
             echo "</span><span class=alert>".xl('Some codes were not displayed.')."</span>\n";
             break;
@@ -153,7 +152,7 @@ $(document).ready(function(){
 
 // show the 'searching...' status and submit the form
 var SubmitForm = function(eObj) {
-    $("#submitbtn").attr("disabled", "true"); 
+    $("#submitbtn").attr("disabled", "true");
     $("#submitbtn").css("disabled", "true");
     $("#searchspinner").css("visibility", "visible");
     return top.restoreSession();
